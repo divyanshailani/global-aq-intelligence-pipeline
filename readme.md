@@ -76,41 +76,41 @@ erDiagram
     model_registry ||--o{ predictions : "generates"
 
     stations {
-        serial id PK
+        int id PK
         int openaq_id UK
-        text name
-        text city
-        text state
+        string name
+        string city
+        string state
         float latitude
         float longitude
-        bool is_active
+        boolean is_active
     }
 
     raw_measurements {
-        bigserial id PK
+        bigint id PK
         int station_id FK
-        text parameter
+        string parameter
         float value
-        text unit
-        timestamptz datetime_utc
+        string unit
+        datetime datetime_utc
     }
 
     clean_measurements {
-        bigserial id PK
+        bigint id PK
         int station_id FK
-        text parameter
+        string parameter
         float value
-        text[] cleaning_flags
-        bool is_valid
+        string cleaning_flags
+        boolean is_valid
     }
 
     daily_features {
         date date PK
-        int station_id PK_FK
-        text parameter PK
+        int station_id FK
+        string parameter PK
         float value
-        smallint month
-        smallint day_of_year
+        int month
+        int day_of_year
         float lag_1
         float lag_7
         float temperature
@@ -120,25 +120,25 @@ erDiagram
     }
 
     predictions {
-        bigserial id PK
+        bigint id PK
         date date
         int station_id FK
-        text parameter
-        smallint horizon_days
+        string parameter
+        int horizon_days
         float predicted_value
-        text naqi_category
-        text model_version
+        string naqi_category
+        string model_version
     }
 
     model_registry {
-        serial id PK
-        text model_name
-        text version
+        int id PK
+        string model_name
+        string version
         float mae
         float rmse
         float r2
-        text artifact_path
-        bool is_active
+        string artifact_path
+        boolean is_active
     }
 ```
 
