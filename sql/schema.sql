@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS stations (
     city            TEXT,
     state           TEXT,
     country         TEXT DEFAULT 'IN',
+    country_code    CHAR(2) DEFAULT 'IN',            -- ISO 3166-1: IN, US, GB, CN
     latitude        DOUBLE PRECISION,
     longitude       DOUBLE PRECISION,
     is_active       BOOLEAN DEFAULT true,
