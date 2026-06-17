@@ -33,7 +33,7 @@ def run_cmd(cmd, cwd=None):
         cwd=cwd or PROJECT_DIR,
         env={**os.environ, 
              "PATH": "/usr/local/bin:/usr/bin:/bin:/Library/Frameworks/Python.framework/Versions/3.14/bin",
-             "OPENAQ_API_KEY": "REDACTED_OPENAQ_KEY_2",
+             "OPENAQ_API_KEY": "REDACTED_OPENAQ_KEY_1",
              "HOME": os.path.expanduser("~")}
     )
     if result.stdout.strip():
