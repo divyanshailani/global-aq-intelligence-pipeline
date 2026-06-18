@@ -1,0 +1,142 @@
+{
+  "country": "IN",
+  "model": "GradientBoostingRegressor",
+  "version": "v6",
+  "horizon_days": 7,
+  "features": [
+    "value",
+    "month",
+    "day_of_week",
+    "is_weekend",
+    "day_of_year",
+    "lag_1",
+    "lag_2",
+    "lag_3",
+    "lag_7",
+    "lag_14",
+    "lag_21",
+    "lag_30",
+    "roll_3_mean",
+    "roll_7_mean",
+    "roll_14_mean",
+    "roll_30_mean",
+    "roll_3_std",
+    "roll_14_std",
+    "pm25_delta_1",
+    "pm25_delta_7",
+    "temperature",
+    "humidity",
+    "wind_speed",
+    "no2_value",
+    "co_value",
+    "o3_value",
+    "so2_value",
+    "nasa_temperature",
+    "nasa_humidity",
+    "nasa_wind_speed",
+    "precipitation",
+    "wind_direction",
+    "fire_count",
+    "future_temp",
+    "future_wind",
+    "future_precip"
+  ],
+  "feature_medians": {
+    "value": 54.6875,
+    "month": 3.0,
+    "day_of_week": 3.0,
+    "is_weekend": 0.0,
+    "day_of_year": 68.0,
+    "lag_1": 55.03,
+    "lag_2": 55.61666666666667,
+    "lag_3": 55.64723602484472,
+    "lag_7": 56.091864867122084,
+    "lag_14": 57.37958975791931,
+    "lag_21": 59.0,
+    "lag_30": 62.153333333333336,
+    "roll_3_mean": 56.6182264957265,
+    "roll_7_mean": 58.185452380952384,
+    "roll_14_mean": 59.503099463818955,
+    "roll_30_mean": 63.83243950304869,
+    "roll_3_std": 11.146120466430851,
+    "roll_14_std": 18.79442996499808,
+    "pm25_delta_1": 0.0,
+    "pm25_delta_7": -1.1213235294117645,
+    "temperature": 25.28,
+    "humidity": 53.098719713503264,
+    "wind_speed": 2.56,
+    "no2_value": 20.56041666666667,
+    "co_value": 730.0,
+    "o3_value": 22.814444444444447,
+    "so2_value": 7.766666666666667,
+    "nasa_temperature": 24.9,
+    "nasa_humidity": 56.71,
+    "nasa_wind_speed": 2.83,
+    "precipitation": 0.0,
+    "wind_direction": 236.0,
+    "fire_count": 9.0,
+    "future_temp": 24.6,
+    "future_wind": 14.7,
+    "future_precip": 0.0
+  },
+  "train_rows": 10897,
+  "test_rows": 3187,
+  "train_stations": 316,
+  "train_date_range": [
+    "2021-01-01",
+    "2026-03-28"
+  ],
+  "test_date_range": [
+    "2021-01-14",
+    "2026-06-10"
+  ],
+  "metrics": {
+    "train_r2": 0.8539,
+    "test_r2": 0.5428,
+    "test_mae": 17.29,
+    "test_rmse": 29.84,
+    "overfit_delta": 0.3111
+  },
+  "top_features": [
+    [
+      "value",
+      0.2834
+    ],
+    [
+      "roll_3_mean",
+      0.2555
+    ],
+    [
+      "future_temp",
+      0.101
+    ],
+    [
+      "day_of_year",
+      0.0623
+    ],
+    [
+      "future_wind",
+      0.0349
+    ],
+    [
+      "lag_1",
+      0.0255
+    ],
+    [
+      "lag_3",
+      0.0203
+    ],
+    [
+      "wind_direction",
+      0.0183
+    ],
+    [
+      "roll_7_mean",
+      0.0171
+    ],
+    [
+      "nasa_temperature",
+      0.0141
+    ]
+  ]
+}

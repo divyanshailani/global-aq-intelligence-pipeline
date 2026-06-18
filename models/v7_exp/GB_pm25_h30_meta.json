@@ -1,0 +1,116 @@
+{
+  "country": "GB",
+  "model": "GradientBoostingRegressor",
+  "version": "v6",
+  "horizon_days": 30,
+  "features": [
+    "value",
+    "month",
+    "day_of_week",
+    "is_weekend",
+    "day_of_year",
+    "lag_1",
+    "lag_2",
+    "lag_3",
+    "lag_7",
+    "lag_14",
+    "lag_21",
+    "lag_30",
+    "roll_3_mean",
+    "roll_7_mean",
+    "roll_14_mean",
+    "roll_30_mean",
+    "roll_3_std",
+    "roll_14_std",
+    "pm25_delta_1",
+    "pm25_delta_7",
+    "future_temp",
+    "future_wind",
+    "future_precip"
+  ],
+  "feature_medians": {
+    "value": 6.71,
+    "month": 2.0,
+    "day_of_week": 3.0,
+    "is_weekend": 0.0,
+    "day_of_year": 42.0,
+    "lag_1": 6.623541666666667,
+    "lag_2": 6.5685,
+    "lag_3": 6.534979166666666,
+    "lag_7": 6.509520833333333,
+    "lag_14": 6.5696666666666665,
+    "lag_21": 6.3914583333333335,
+    "lag_30": 6.521166666666667,
+    "roll_3_mean": 7.036222222222222,
+    "roll_7_mean": 7.577627976190477,
+    "roll_14_mean": 8.216671130952381,
+    "roll_30_mean": 8.347541666666666,
+    "roll_3_std": 2.3670573250786027,
+    "roll_14_std": 4.447338087759624,
+    "pm25_delta_1": 0.3225,
+    "pm25_delta_7": 0.3366041666666675,
+    "future_temp": 8.1,
+    "future_wind": 22.5,
+    "future_precip": 0.8
+  },
+  "train_rows": 10631,
+  "test_rows": 4053,
+  "train_stations": 158,
+  "train_date_range": [
+    "2021-05-01",
+    "2026-03-28"
+  ],
+  "test_date_range": [
+    "2021-01-15",
+    "2026-05-18"
+  ],
+  "metrics": {
+    "train_r2": 0.8114,
+    "test_r2": -0.425,
+    "test_mae": 5.47,
+    "test_rmse": 15.45,
+    "overfit_delta": 1.2364
+  },
+  "top_features": [
+    [
+      "day_of_year",
+      0.3756
+    ],
+    [
+      "future_wind",
+      0.2292
+    ],
+    [
+      "future_temp",
+      0.1185
+    ],
+    [
+      "month",
+      0.0404
+    ],
+    [
+      "value",
+      0.0286
+    ],
+    [
+      "pm25_delta_7",
+      0.0268
+    ],
+    [
+      "day_of_week",
+      0.0248
+    ],
+    [
+      "pm25_delta_1",
+      0.0218
+    ],
+    [
+      "future_precip",
+      0.0207
+    ],
+    [
+      "lag_2",
+      0.0187
+    ]
+  ]
+}
