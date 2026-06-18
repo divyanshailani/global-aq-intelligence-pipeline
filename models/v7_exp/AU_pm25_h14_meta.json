@@ -1,0 +1,116 @@
+{
+  "country": "AU",
+  "model": "GradientBoostingRegressor",
+  "version": "v6",
+  "horizon_days": 14,
+  "features": [
+    "value",
+    "month",
+    "day_of_week",
+    "is_weekend",
+    "day_of_year",
+    "lag_1",
+    "lag_2",
+    "lag_3",
+    "lag_7",
+    "lag_14",
+    "lag_21",
+    "lag_30",
+    "roll_3_mean",
+    "roll_7_mean",
+    "roll_14_mean",
+    "roll_30_mean",
+    "roll_3_std",
+    "roll_14_std",
+    "pm25_delta_1",
+    "pm25_delta_7",
+    "future_temp",
+    "future_wind",
+    "future_precip"
+  ],
+  "feature_medians": {
+    "value": 5.12515,
+    "month": 6.0,
+    "day_of_week": 3.0,
+    "is_weekend": 0.0,
+    "day_of_year": 176.0,
+    "lag_1": 5.1243335000000005,
+    "lag_2": 5.122318,
+    "lag_3": 5.1258275,
+    "lag_7": 5.1262085,
+    "lag_14": 5.116375,
+    "lag_21": 5.1172915,
+    "lag_30": 5.1185835,
+    "roll_3_mean": 5.269235999999999,
+    "roll_7_mean": 5.392738428571429,
+    "roll_14_mean": 5.489163107142857,
+    "roll_30_mean": 5.572214833333334,
+    "roll_3_std": 1.4523368799016179,
+    "roll_14_std": 2.197714736511915,
+    "pm25_delta_1": 0.08724949999999998,
+    "pm25_delta_7": 0.009359999999999813,
+    "future_temp": 16.5,
+    "future_wind": 17.7,
+    "future_precip": 0.2
+  },
+  "train_rows": 59276,
+  "test_rows": 15317,
+  "train_stations": 58,
+  "train_date_range": [
+    "2021-01-02",
+    "2026-02-21"
+  ],
+  "test_date_range": [
+    "2021-09-21",
+    "2026-06-03"
+  ],
+  "metrics": {
+    "train_r2": 0.4698,
+    "test_r2": 0.2667,
+    "test_mae": 2.16,
+    "test_rmse": 3.16,
+    "overfit_delta": 0.2031
+  },
+  "top_features": [
+    [
+      "roll_30_mean",
+      0.197
+    ],
+    [
+      "day_of_year",
+      0.1846
+    ],
+    [
+      "future_temp",
+      0.1477
+    ],
+    [
+      "future_wind",
+      0.1357
+    ],
+    [
+      "future_precip",
+      0.0689
+    ],
+    [
+      "roll_14_std",
+      0.0481
+    ],
+    [
+      "value",
+      0.0307
+    ],
+    [
+      "lag_30",
+      0.0294
+    ],
+    [
+      "roll_7_mean",
+      0.0216
+    ],
+    [
+      "lag_21",
+      0.0196
+    ]
+  ]
+}

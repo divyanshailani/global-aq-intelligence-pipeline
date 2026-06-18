@@ -1,0 +1,120 @@
+{
+  "country": "GB",
+  "model": "GradientBoostingRegressor",
+  "version": "v6",
+  "horizon_days": 1,
+  "features": [
+    "value",
+    "month",
+    "day_of_week",
+    "is_weekend",
+    "day_of_year",
+    "lag_1",
+    "lag_2",
+    "lag_3",
+    "lag_7",
+    "lag_14",
+    "lag_21",
+    "lag_30",
+    "roll_3_mean",
+    "roll_7_mean",
+    "roll_14_mean",
+    "roll_30_mean",
+    "roll_3_std",
+    "roll_14_std",
+    "pm25_delta_1",
+    "pm25_delta_7",
+    "temperature",
+    "humidity",
+    "future_temp",
+    "future_wind",
+    "future_precip"
+  ],
+  "feature_medians": {
+    "value": 6.5,
+    "month": 3.0,
+    "day_of_week": 3.0,
+    "is_weekend": 0.0,
+    "day_of_year": 82.0,
+    "lag_1": 6.5,
+    "lag_2": 6.525229166666666,
+    "lag_3": 6.552708333333333,
+    "lag_7": 6.532979166666667,
+    "lag_14": 6.478000000000001,
+    "lag_21": 6.348229166666666,
+    "lag_30": 6.43875,
+    "roll_3_mean": 7.02701388888889,
+    "roll_7_mean": 7.508639880952382,
+    "roll_14_mean": 7.998513392857143,
+    "roll_30_mean": 8.346298055555554,
+    "roll_3_std": 2.210867535836497,
+    "roll_14_std": 3.9741941738057163,
+    "pm25_delta_1": 0.17448698202664925,
+    "pm25_delta_7": 0.1156219835918435,
+    "temperature": 16.225500007470448,
+    "humidity": 56.92730868729678,
+    "future_temp": 8.4,
+    "future_wind": 20.9,
+    "future_precip": 0.7
+  },
+  "train_rows": 23381,
+  "test_rows": 6095,
+  "train_stations": 317,
+  "train_date_range": [
+    "2021-01-03",
+    "2026-06-11"
+  ],
+  "test_date_range": [
+    "2021-02-06",
+    "2026-06-16"
+  ],
+  "metrics": {
+    "train_r2": 0.749,
+    "test_r2": 0.2481,
+    "test_mae": 2.41,
+    "test_rmse": 10.06,
+    "overfit_delta": 0.5009
+  },
+  "top_features": [
+    [
+      "value",
+      0.4181
+    ],
+    [
+      "future_wind",
+      0.1157
+    ],
+    [
+      "humidity",
+      0.0813
+    ],
+    [
+      "day_of_year",
+      0.0657
+    ],
+    [
+      "lag_2",
+      0.0489
+    ],
+    [
+      "roll_7_mean",
+      0.0349
+    ],
+    [
+      "future_temp",
+      0.0339
+    ],
+    [
+      "roll_3_mean",
+      0.0316
+    ],
+    [
+      "pm25_delta_1",
+      0.0218
+    ],
+    [
+      "roll_14_std",
+      0.0177
+    ]
+  ]
+}

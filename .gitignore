@@ -45,3 +45,7 @@ logs/
 .env
 .env.*
 !.env.example
+
+# Admin (local-only, not for public repo)
+scripts/admin_dashboard.py
+data/weather_openmeteo_*.csv

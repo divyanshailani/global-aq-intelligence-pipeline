@@ -1,0 +1,116 @@
+{
+  "country": "AU",
+  "model": "GradientBoostingRegressor",
+  "version": "v6",
+  "horizon_days": 1,
+  "features": [
+    "value",
+    "month",
+    "day_of_week",
+    "is_weekend",
+    "day_of_year",
+    "lag_1",
+    "lag_2",
+    "lag_3",
+    "lag_7",
+    "lag_14",
+    "lag_21",
+    "lag_30",
+    "roll_3_mean",
+    "roll_7_mean",
+    "roll_14_mean",
+    "roll_30_mean",
+    "roll_3_std",
+    "roll_14_std",
+    "pm25_delta_1",
+    "pm25_delta_7",
+    "future_temp",
+    "future_wind",
+    "future_precip"
+  ],
+  "feature_medians": {
+    "value": 5.116083,
+    "month": 6.0,
+    "day_of_week": 3.0,
+    "is_weekend": 0.0,
+    "day_of_year": 172.0,
+    "lag_1": 5.107917,
+    "lag_2": 5.108229,
+    "lag_3": 5.10775,
+    "lag_7": 5.108229,
+    "lag_14": 5.11751,
+    "lag_21": 5.120708,
+    "lag_30": 5.114667,
+    "roll_3_mean": 5.264500000000003,
+    "roll_7_mean": 5.389423142857142,
+    "roll_14_mean": 5.489211857142857,
+    "roll_30_mean": 5.584759416666667,
+    "roll_3_std": 1.448146202589204,
+    "roll_14_std": 2.1943933195835856,
+    "pm25_delta_1": 0.07897949999999998,
+    "pm25_delta_7": 0.01580399979498474,
+    "future_temp": 16.5,
+    "future_wind": 17.7,
+    "future_precip": 0.2
+  },
+  "train_rows": 63977,
+  "test_rows": 16110,
+  "train_stations": 167,
+  "train_date_range": [
+    "2021-01-02",
+    "2026-06-10"
+  ],
+  "test_date_range": [
+    "2021-09-05",
+    "2026-06-16"
+  ],
+  "metrics": {
+    "train_r2": 0.577,
+    "test_r2": 0.4514,
+    "test_mae": 1.88,
+    "test_rmse": 2.74,
+    "overfit_delta": 0.1256
+  },
+  "top_features": [
+    [
+      "value",
+      0.6037
+    ],
+    [
+      "future_wind",
+      0.0825
+    ],
+    [
+      "future_precip",
+      0.0606
+    ],
+    [
+      "future_temp",
+      0.0431
+    ],
+    [
+      "day_of_year",
+      0.0276
+    ],
+    [
+      "roll_30_mean",
+      0.0251
+    ],
+    [
+      "lag_1",
+      0.0232
+    ],
+    [
+      "roll_14_mean",
+      0.0206
+    ],
+    [
+      "roll_14_std",
+      0.0147
+    ],
+    [
+      "roll_3_std",
+      0.0131
+    ]
+  ]
+}
