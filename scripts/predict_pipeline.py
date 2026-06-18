@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src.config import DB_CONFIG, MODEL_DIR as _MODEL_DIR, SITE_DATA_DIR
 
 MODEL_DIR = _MODEL_DIR
+V6_MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models", "v6")
 OUTPUT_DIR = SITE_DATA_DIR
 
 COUNTRIES = ["IN", "US", "GB", "AU"]
@@ -202,8 +203,13 @@ def backtest_recent(conn, n_days=7):
     country_metrics = {}
 
     for cc in COUNTRIES:
-        meta_path = os.path.join(MODEL_DIR, f"{cc}_pm25_meta.json")
-        model_path = os.path.join(MODEL_DIR, f"{cc}_pm25_gbr.pkl")
+        if has_v6_models(cc):
+            meta_path = os.path.join(V6_MODEL_DIR, f"{cc}_pm25_h1_meta.json")
+            model_path = os.path.join(V6_MODEL_DIR, f"{cc}_pm25_h1_gbr.pkl")
+        else:
+            meta_path = os.path.join(MODEL_DIR, f"{cc}_pm25_meta.json")
+            model_path = os.path.join(MODEL_DIR, f"{cc}_pm25_gbr.pkl")
+
         if not os.path.exists(model_path):
             continue
 
@@ -398,21 +404,119 @@ def predict_horizon(model, features, last_row, horizon_days, meta_path):
     return predictions
 
 
+def has_v6_models(country_code):
+    for h in [1, 7, 14, 30]:
+        if not os.path.exists(os.path.join(V6_MODEL_DIR, f"{country_code}_pm25_h{h}_gbr.pkl")):
+            return False
+    return True
+
+
+def predict_direct_v6(country_code, last_row):
+    """
+    30-day forecast using direct horizon models (v6).
+    Days 1/7/14/30 are direct model outputs.
+    Intermediate days are linearly interpolated between bracketing anchors.
+    No chaining, no error propagation.
+    """
+    direct = {}
+    for h in [1, 7, 14, 30]:
+        model_path = os.path.join(V6_MODEL_DIR, f"{country_code}_pm25_h{h}_gbr.pkl")
+        meta_path  = os.path.join(V6_MODEL_DIR, f"{country_code}_pm25_h{h}_meta.json")
+        if not os.path.exists(model_path):
+            continue
+        model = joblib.load(model_path)
+        with open(meta_path) as f:
+            meta = json.load(f)
+        feat_cols = meta["features"]
+        medians   = meta.get("feature_medians", {})
+
+        row = {}
+        for col in feat_cols:
+            val = last_row.get(col)
+            row[col] = val if val is not None else medians.get(col, 0)
+
+        X = pd.DataFrame([row])[feat_cols]
+        X = X.apply(pd.to_numeric, errors="coerce")
+        for col in feat_cols:
+            if X[col].isna().any():
+                X[col] = X[col].fillna(medians.get(col, 0))
+        X = X.replace([np.inf, -np.inf], 0)
+
+        pred = float(model.predict(X)[0])
+        direct[h] = max(0.0, pred)
+
+    if not direct:
+        return None
+
+    anchor_days = sorted(direct.keys())
+    last_date   = pd.to_datetime(last_row.get("date", date.today()))
+    predictions = []
+
+    for day in range(1, 31):
+        target_date = last_date + timedelta(days=day)
+
+        if day in direct:
+            pred      = direct[day]
+            is_direct = True
+        else:
+            lo = max((d for d in anchor_days if d < day), default=None)
+            hi = min((d for d in anchor_days if d > day), default=None)
+            if lo is None:
+                pred = direct[hi]
+            elif hi is None:
+                pred = direct[lo]
+            else:
+                t    = (day - lo) / (hi - lo)
+                pred = direct[lo] + t * (direct[hi] - direct[lo])
+            pred      = max(0.0, pred)
+            is_direct = False
+
+        if day == 1:
+            confidence     = "forecast"
+            confidence_pct = 90
+        elif day <= 7:
+            confidence     = "medium confidence"
+            confidence_pct = max(60, 85 - (day - 2) * 4)
+        else:
+            confidence     = "trend projection"
+            confidence_pct = max(30, 60 - (day - 8) * 1.5)
+
+        target_str = (
+            str(target_date.date())
+            if hasattr(target_date, "date")
+            else str(target_date)
+        )
+        predictions.append({
+            "target_date":    target_str,
+            "predicted_pm25": round(pred, 2),
+            "horizon_days":   day,
+            "confidence":     confidence,
+            "confidence_pct": round(confidence_pct),
+            "model":          "v6_direct" if is_direct else "v6_interp",
+        })
+
+    return predictions
+
+
 def run_predictions(conn, run_id):
-    """Generate predictions for all countries."""
     all_predictions = {}
     total_predictions = 0
 
     for cc in COUNTRIES:
-        model_path = os.path.join(MODEL_DIR, f"{cc}_pm25_gbr.pkl")
-        meta_path = os.path.join(MODEL_DIR, f"{cc}_pm25_meta.json")
+        if has_v6_models(cc):
+            use_v6 = True
+            print(f"\n  {COUNTRY_META[cc]['flag']} {cc}: Generating v6 direct forecasts...")
+        else:
+            use_v6 = False
+            model_path = os.path.join(MODEL_DIR, f"{cc}_pm25_gbr.pkl")
+            meta_path = os.path.join(MODEL_DIR, f"{cc}_pm25_meta.json")
 
-        if not os.path.exists(model_path):
-            print(f"  ⚠️ No model for {cc}, skipping")
-            continue
+            if not os.path.exists(model_path):
+                print(f"  ⚠️ No model for {cc}, skipping")
+                continue
 
-        model = joblib.load(model_path)
-        print(f"\n  {COUNTRY_META[cc]['flag']} {cc}: Generating forecasts...")
+            model = joblib.load(model_path)
+            print(f"\n  {COUNTRY_META[cc]['flag']} {cc}: Generating v5 forecasts...")
 
         # Get recent features only from active stations.
         df = get_recent_features(conn, cc)
@@ -436,7 +540,13 @@ def run_predictions(conn, run_id):
             if (date.today() - last_data_date).days > ACTIVE_STATION_MAX_AGE_DAYS:
                 continue
 
-            preds = predict_horizon(model, df, last_row, horizon_days=30, meta_path=meta_path)
+            if use_v6:
+                preds = predict_direct_v6(cc, last_row)
+                if not preds:
+                    continue
+            else:
+                preds = predict_horizon(model, df, last_row, horizon_days=30, meta_path=meta_path)
+            
             preds = [
                 p for p in preds
                 if pd.to_datetime(p["target_date"]).date() >= date.today()

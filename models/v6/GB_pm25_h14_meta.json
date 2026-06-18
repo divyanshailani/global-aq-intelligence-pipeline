@@ -1,0 +1,112 @@
+{
+  "country": "GB",
+  "model": "GradientBoostingRegressor",
+  "version": "v6",
+  "horizon_days": 14,
+  "features": [
+    "value",
+    "month",
+    "day_of_week",
+    "is_weekend",
+    "day_of_year",
+    "lag_1",
+    "lag_2",
+    "lag_3",
+    "lag_7",
+    "lag_14",
+    "lag_21",
+    "lag_30",
+    "roll_3_mean",
+    "roll_7_mean",
+    "roll_14_mean",
+    "roll_30_mean",
+    "roll_3_std",
+    "roll_14_std",
+    "pm25_delta_1",
+    "pm25_delta_7",
+    "temperature"
+  ],
+  "feature_medians": {
+    "value": 6.373458333333334,
+    "month": 3.0,
+    "day_of_week": 3.0,
+    "is_weekend": 0.0,
+    "day_of_year": 61.0,
+    "lag_1": 6.364083333333333,
+    "lag_2": 6.375375,
+    "lag_3": 6.379189263853761,
+    "lag_7": 6.41125,
+    "lag_14": 6.428285715788958,
+    "lag_21": 6.544875,
+    "lag_30": 6.613729166666666,
+    "roll_3_mean": 6.7951458333333346,
+    "roll_7_mean": 7.345238095238095,
+    "roll_14_mean": 8.15270982142857,
+    "roll_30_mean": 8.824762305555556,
+    "roll_3_std": 2.212787048268794,
+    "roll_14_std": 4.567306336401909,
+    "pm25_delta_1": 0.15918749999999893,
+    "pm25_delta_7": 0.1257708333333336,
+    "temperature": 14.496249114197713
+  },
+  "train_rows": 16134,
+  "test_rows": 5113,
+  "train_stations": 244,
+  "train_date_range": [
+    "2021-01-03",
+    "2026-04-27"
+  ],
+  "test_date_range": [
+    "2021-01-28",
+    "2026-06-03"
+  ],
+  "metrics": {
+    "train_r2": 0.6464,
+    "test_r2": -0.0297,
+    "test_mae": 4.36,
+    "test_rmse": 10.33,
+    "overfit_delta": 0.6761
+  },
+  "top_features": [
+    [
+      "day_of_year",
+      0.481
+    ],
+    [
+      "roll_3_std",
+      0.0657
+    ],
+    [
+      "pm25_delta_1",
+      0.065
+    ],
+    [
+      "lag_2",
+      0.0536
+    ],
+    [
+      "temperature",
+      0.0422
+    ],
+    [
+      "roll_3_mean",
+      0.0413
+    ],
+    [
+      "day_of_week",
+      0.0379
+    ],
+    [
+      "value",
+      0.0346
+    ],
+    [
+      "lag_3",
+      0.0334
+    ],
+    [
+      "lag_21",
+      0.0262
+    ]
+  ]
+}

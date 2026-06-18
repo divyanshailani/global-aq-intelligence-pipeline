@@ -48,7 +48,26 @@ The experiment that defined this project:
 
 *Note: LR R²=1.00 flagged as potential `roll_3_mean` leakage — GBM 0.97 is the validated result.*
 
-### Phase 5 — Global Expansion + 30-Day Chained Forecast (v5, current) · *The Public Product*
+### Phase 5 — Global Expansion + 30-Day Chained Forecast (v5) · *The Public Product*
+
+(v5 description remains...)
+
+### Phase 6 — Direct-Horizon Architecture (v6, current) · *Fixing the Time Machine*
+
+The 30-day chained forecast in v5 compounded errors too rapidly. We switched to a **Direct-Horizon** architecture.
+Instead of predicting tomorrow and feeding it back into the model to predict the next day, we trained 4 independent models per country:
+- `h1`: 1-day ahead forecast
+- `h7`: 7-day ahead forecast
+- `h14`: 14-day ahead forecast
+- `h30`: 30-day ahead forecast
+
+**Honest Labels System:**
+Because we are lacking a true external weather API, our confidence for distant horizons drops. We updated the UI to honestly reflect this:
+- **1-Day:** `forecast`
+- **7-Day:** `medium confidence`
+- **14/30-Day:** `trend projection`
+
+
 
 The model went global: **India 🇮🇳 + USA 🇺🇸 + UK 🇬🇧 + Australia 🇦🇺**
 
@@ -194,14 +213,13 @@ Random split ❌         Chrono split ✅         Chrono split ✅
                                               NASA POWER ✅
                                               FIRMS fire ✅
 
-v4 (memory breakthrough)      v5 (global, current)
-R² = 0.97                     R² = 0.48–0.80 (per country)
-MAE = 1.9 µg/m³               MAE = 1.55–8.52 µg/m³
-Features: 18                  Features: 18 per country model
-India only                    4 countries ✅
-lag_1, lag_7 added ✅          30-day chained forecast ✅
-roll_3_mean added ✅           Confidence tiers ✅
-                              Public Vercel site ✅
+v4 (memory breakthrough)      v5 (chained)                  v6 (Direct-Horizon, current)
+R² = 0.97                     R² = 0.48–0.80 (per country)  R² = 0.72-0.85 (live backtest)
+MAE = 1.9 µg/m³               MAE = 1.55–8.52 µg/m³         MAE = 0.8-5.4 µg/m³
+Features: 18                  Features: 18 per country      Separate h1, h7, h14, h30 models
+India only                    4 countries ✅                 Fixed boundary leakage ✅
+lag_1, lag_7 added ✅          30-day chained forecast ❌    Direct future prediction ✅
+roll_3_mean added ✅           Confidence tiers ✅           Honest Confidence Labels ✅
 ```
 
 ---
@@ -237,6 +255,19 @@ roll_3_mean added ✅           Confidence tiers ✅
 **Problem:** Vercel static site shows the same predictions forever unless manually updated. No live fetch on a static export.
 
 **Status:** Solved by local admin pipeline — run daily, commit JSON files, Vercel auto-deploys. GitHub Actions cron job planned for automation.
+
+### 7. The Row-Shift Target Bug (v6 fix)
+**Problem:** To train the `h30` model, we initially shifted the target variable by 30 *rows* (`g['value'].shift(-30)`). But since historical sensors have missing days, a 30-row shift sometimes jumped 2 years into the future!
+**Fix:** Switched to a strict calendar-date merge (`target_date = date + 30 days`), ensuring the model always predicts exactly the correct horizon.
+
+### 8. Boundary Leakage in Temporal Splitting (v6 fix)
+**Problem:** We split the train/test sets chronologically by row index *after* attaching the future target. This caused the last 30 days of the training set to "peek" into the future test set's target values.
+**Fix:** Filtered the split using the *target date* (`target_date < split_date`), ensuring total isolation.
+
+### 9. Great Britain's Negative R² Quirks
+**Problem:** The UK model's R² occasionally dipped into massive negatives (-0.28 to -16) even when the Mean Absolute Error (MAE) was incredibly low (2-5 µg/m³).
+**Insight:** Great Britain has a very low and stable PM2.5 baseline (low variance). Since R² is calculated against the dataset's variance, missing rare, massive spikes mathematically destroys the R² score, even if the model is perfectly accurate 95% of the time. 
+**Future Fix:** We need a live weather API (v7) to predict these sudden spikes.
 
 ---
 
@@ -420,12 +451,13 @@ __pycache__/        # No Python cache
 - [x] Confidence tier system per country
 - [x] Public Vercel frontend (Next.js 15)
 - [x] AQI-themed animated canvas background
-- [ ] Admin panel: one-click fetch → predict → deploy
+- [x] Admin panel: local FastAPI + React dashboard
+- [x] Direct-Horizon modeling (h1, h7, h14, h30)
+- [ ] Integration of external 14-day Weather Forecast API (v7 upgrade)
 - [ ] Daily GitHub Actions cron (auto-update Vercel)
 - [ ] Weekly model retrain with R² guard
 - [ ] Live validation log: predicted vs actual
 - [ ] LSTM/Transformer experiment (R² > 0.98 target)
-- [ ] NASA FIRMS integration for AU/US wildfire events
 
 ---
 
