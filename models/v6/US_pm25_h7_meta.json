@@ -1,0 +1,110 @@
+{
+  "country": "US",
+  "model": "GradientBoostingRegressor",
+  "version": "v6",
+  "horizon_days": 7,
+  "features": [
+    "value",
+    "month",
+    "day_of_week",
+    "is_weekend",
+    "day_of_year",
+    "lag_1",
+    "lag_2",
+    "lag_3",
+    "lag_7",
+    "lag_14",
+    "lag_21",
+    "lag_30",
+    "roll_3_mean",
+    "roll_7_mean",
+    "roll_14_mean",
+    "roll_30_mean",
+    "roll_3_std",
+    "roll_14_std",
+    "pm25_delta_1",
+    "pm25_delta_7"
+  ],
+  "feature_medians": {
+    "value": 6.45,
+    "month": 6.0,
+    "day_of_week": 3.0,
+    "is_weekend": 0.0,
+    "day_of_year": 169.0,
+    "lag_1": 6.45,
+    "lag_2": 6.45,
+    "lag_3": 6.45,
+    "lag_7": 6.45,
+    "lag_14": 6.45,
+    "lag_21": 6.45,
+    "lag_30": 6.449999999999999,
+    "roll_3_mean": 6.733333333333332,
+    "roll_7_mean": 7.0,
+    "roll_14_mean": 7.178571428571429,
+    "roll_30_mean": 7.3,
+    "roll_3_std": 1.7097758137642876,
+    "roll_14_std": 2.8888202361052553,
+    "pm25_delta_1": 0.10000000000000053,
+    "pm25_delta_7": 0.0
+  },
+  "train_rows": 1025122,
+  "test_rows": 259332,
+  "train_stations": 1397,
+  "train_date_range": [
+    "2021-01-02",
+    "2025-10-12"
+  ],
+  "test_date_range": [
+    "2021-01-15",
+    "2026-06-09"
+  ],
+  "metrics": {
+    "train_r2": 0.2984,
+    "test_r2": 0.1415,
+    "test_mae": 3.19,
+    "test_rmse": 5.27,
+    "overfit_delta": 0.1569
+  },
+  "top_features": [
+    [
+      "roll_14_mean",
+      0.26
+    ],
+    [
+      "roll_30_mean",
+      0.2222
+    ],
+    [
+      "day_of_year",
+      0.1997
+    ],
+    [
+      "value",
+      0.0735
+    ],
+    [
+      "roll_3_mean",
+      0.0358
+    ],
+    [
+      "roll_7_mean",
+      0.0352
+    ],
+    [
+      "lag_14",
+      0.0282
+    ],
+    [
+      "lag_30",
+      0.0275
+    ],
+    [
+      "roll_14_std",
+      0.0221
+    ],
+    [
+      "lag_21",
+      0.0207
+    ]
+  ]
+}

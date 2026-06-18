@@ -263,6 +263,24 @@ ALTER TABLE prediction_log
     ADD COLUMN IF NOT EXISTS error DOUBLE PRECISION,
     ADD COLUMN IF NOT EXISTS validated_at TIMESTAMP;
 
+-- ============================================================
+-- v6 Migration: extended lag / rolling / momentum features
+-- These columns enable direct multi-horizon training (train_v6.py)
+-- without chaining error accumulation.
+-- ============================================================
+ALTER TABLE daily_features
+    ADD COLUMN IF NOT EXISTS lag_14       DOUBLE PRECISION,   -- 2-week lag
+    ADD COLUMN IF NOT EXISTS lag_21       DOUBLE PRECISION,   -- 3-week lag
+    ADD COLUMN IF NOT EXISTS lag_30       DOUBLE PRECISION,   -- monthly lag
+    ADD COLUMN IF NOT EXISTS roll_14_mean DOUBLE PRECISION,   -- 14-day rolling mean
+    ADD COLUMN IF NOT EXISTS roll_30_mean DOUBLE PRECISION,   -- 30-day rolling mean
+    ADD COLUMN IF NOT EXISTS roll_14_std  DOUBLE PRECISION,   -- 14-day rolling std
+    ADD COLUMN IF NOT EXISTS pm25_delta_1 DOUBLE PRECISION,   -- 1-day momentum (lag1 - lag2)
+    ADD COLUMN IF NOT EXISTS pm25_delta_7 DOUBLE PRECISION;   -- weekly momentum (lag1 - lag7)
+
+-- prediction_log: store which model version was used
+ALTER TABLE prediction_log
+    ADD COLUMN IF NOT EXISTS model_version TEXT DEFAULT 'v5';
 
 -- ============================================================
 -- Verify all tables created

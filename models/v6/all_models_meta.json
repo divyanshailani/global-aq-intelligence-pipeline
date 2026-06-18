@@ -1,0 +1,1884 @@
+{
+  "IN": {
+    "h1": {
+      "country": "IN",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 1,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7",
+        "temperature",
+        "humidity",
+        "wind_speed",
+        "no2_value",
+        "co_value",
+        "o3_value",
+        "so2_value",
+        "nasa_temperature",
+        "nasa_humidity",
+        "nasa_wind_speed",
+        "precipitation",
+        "wind_direction",
+        "fire_count"
+      ],
+      "feature_medians": {
+        "value": 49.92590909090909,
+        "month": 3.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 67.0,
+        "lag_1": 50.434999999999995,
+        "lag_2": 50.81075757575757,
+        "lag_3": 51.03272058823529,
+        "lag_7": 51.87863636363636,
+        "lag_14": 52.9375,
+        "lag_21": 54.57142857142857,
+        "lag_30": 56.0,
+        "roll_3_mean": 51.99824074074074,
+        "roll_7_mean": 53.48060386427298,
+        "roll_14_mean": 54.85572529390544,
+        "roll_30_mean": 55.95413832562083,
+        "roll_3_std": 10.103633078800877,
+        "roll_14_std": 17.997957146151897,
+        "pm25_delta_1": 0.022619047619045318,
+        "pm25_delta_7": -1.2100000000000009,
+        "temperature": 25.22,
+        "humidity": 53.77066666666667,
+        "wind_speed": 1.63,
+        "no2_value": 19.9225,
+        "co_value": 562.8174603174604,
+        "o3_value": 24.95422222222222,
+        "so2_value": 8.26,
+        "nasa_temperature": 25.03,
+        "nasa_humidity": 53.845,
+        "nasa_wind_speed": 2.82,
+        "precipitation": 0.0,
+        "wind_direction": 229.7,
+        "fire_count": 9.0
+      },
+      "train_rows": 20227,
+      "test_rows": 5414,
+      "train_stations": 517,
+      "train_date_range": [
+        "2021-01-01",
+        "2026-06-11"
+      ],
+      "test_date_range": [
+        "2021-01-18",
+        "2026-06-16"
+      ],
+      "metrics": {
+        "train_r2": 0.8763,
+        "test_r2": 0.751,
+        "test_mae": 9.39,
+        "test_rmse": 16.62,
+        "overfit_delta": 0.1254
+      },
+      "top_features": [
+        [
+          "value",
+          0.8195
+        ],
+        [
+          "lag_1",
+          0.0255
+        ],
+        [
+          "nasa_temperature",
+          0.0218
+        ],
+        [
+          "day_of_year",
+          0.0147
+        ],
+        [
+          "roll_3_mean",
+          0.0116
+        ],
+        [
+          "roll_7_mean",
+          0.0088
+        ],
+        [
+          "lag_3",
+          0.0078
+        ],
+        [
+          "nasa_humidity",
+          0.007
+        ],
+        [
+          "roll_14_mean",
+          0.0067
+        ],
+        [
+          "pm25_delta_1",
+          0.0054
+        ]
+      ]
+    },
+    "h7": {
+      "country": "IN",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 7,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7",
+        "temperature",
+        "humidity",
+        "wind_speed",
+        "no2_value",
+        "co_value",
+        "o3_value",
+        "so2_value",
+        "nasa_temperature",
+        "nasa_humidity",
+        "nasa_wind_speed",
+        "precipitation",
+        "wind_direction",
+        "fire_count"
+      ],
+      "feature_medians": {
+        "value": 54.6875,
+        "month": 3.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 68.0,
+        "lag_1": 55.03,
+        "lag_2": 55.61666666666667,
+        "lag_3": 55.64723602484472,
+        "lag_7": 56.091864867122084,
+        "lag_14": 57.37958975791931,
+        "lag_21": 59.0,
+        "lag_30": 62.153333333333336,
+        "roll_3_mean": 56.6182264957265,
+        "roll_7_mean": 58.185452380952384,
+        "roll_14_mean": 59.503099463818955,
+        "roll_30_mean": 63.83243950304869,
+        "roll_3_std": 11.146120466430851,
+        "roll_14_std": 18.79442996499808,
+        "pm25_delta_1": 0.0,
+        "pm25_delta_7": -1.1213235294117645,
+        "temperature": 25.28,
+        "humidity": 53.098719713503264,
+        "wind_speed": 2.56,
+        "no2_value": 20.56041666666667,
+        "co_value": 730.0,
+        "o3_value": 22.814444444444447,
+        "so2_value": 7.766666666666667,
+        "nasa_temperature": 24.9,
+        "nasa_humidity": 56.71,
+        "nasa_wind_speed": 2.83,
+        "precipitation": 0.0,
+        "wind_direction": 236.0,
+        "fire_count": 9.0
+      },
+      "train_rows": 10897,
+      "test_rows": 3187,
+      "train_stations": 316,
+      "train_date_range": [
+        "2021-01-01",
+        "2026-03-28"
+      ],
+      "test_date_range": [
+        "2021-01-14",
+        "2026-06-10"
+      ],
+      "metrics": {
+        "train_r2": 0.84,
+        "test_r2": 0.5116,
+        "test_mae": 17.86,
+        "test_rmse": 30.84,
+        "overfit_delta": 0.3284
+      },
+      "top_features": [
+        [
+          "value",
+          0.3041
+        ],
+        [
+          "roll_3_mean",
+          0.2645
+        ],
+        [
+          "day_of_year",
+          0.0947
+        ],
+        [
+          "nasa_temperature",
+          0.0723
+        ],
+        [
+          "lag_1",
+          0.0223
+        ],
+        [
+          "lag_3",
+          0.0214
+        ],
+        [
+          "wind_direction",
+          0.0211
+        ],
+        [
+          "nasa_humidity",
+          0.0181
+        ],
+        [
+          "roll_7_mean",
+          0.0165
+        ],
+        [
+          "lag_2",
+          0.0133
+        ]
+      ]
+    },
+    "h14": {
+      "country": "IN",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 14,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7",
+        "temperature",
+        "humidity",
+        "wind_speed",
+        "no2_value",
+        "co_value",
+        "o3_value",
+        "so2_value",
+        "nasa_temperature",
+        "nasa_humidity",
+        "nasa_wind_speed",
+        "precipitation",
+        "wind_direction",
+        "fire_count"
+      ],
+      "feature_medians": {
+        "value": 60.29230769230769,
+        "month": 2.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 53.0,
+        "lag_1": 60.51428571428572,
+        "lag_2": 61.0,
+        "lag_3": 61.5,
+        "lag_7": 62.778999999999996,
+        "lag_14": 63.449444444444445,
+        "lag_21": 64.98277777777778,
+        "lag_30": 64.58333333333333,
+        "roll_3_mean": 62.38645604395604,
+        "roll_7_mean": 64.52097619047619,
+        "roll_14_mean": 66.64973709463297,
+        "roll_30_mean": 66.89489199442056,
+        "roll_3_std": 12.371329236012937,
+        "roll_14_std": 20.834112867237593,
+        "pm25_delta_1": 0.0,
+        "pm25_delta_7": -3.800833333333344,
+        "temperature": 25.215,
+        "humidity": 53.62317628300442,
+        "wind_speed": 2.53,
+        "no2_value": 22.9625,
+        "co_value": 789.5238095238095,
+        "o3_value": 24.775000000000002,
+        "so2_value": 8.2,
+        "nasa_temperature": 23.85,
+        "nasa_humidity": 53.3,
+        "nasa_wind_speed": 2.79,
+        "precipitation": 0.0,
+        "wind_direction": 230.2,
+        "fire_count": 9.0
+      },
+      "train_rows": 6315,
+      "test_rows": 2271,
+      "train_stations": 286,
+      "train_date_range": [
+        "2021-01-01",
+        "2026-03-07"
+      ],
+      "test_date_range": [
+        "2021-01-22",
+        "2026-05-12"
+      ],
+      "metrics": {
+        "train_r2": 0.8248,
+        "test_r2": 0.581,
+        "test_mae": 20.28,
+        "test_rmse": 31.45,
+        "overfit_delta": 0.2439
+      },
+      "top_features": [
+        [
+          "value",
+          0.2795
+        ],
+        [
+          "lag_1",
+          0.1618
+        ],
+        [
+          "day_of_year",
+          0.1176
+        ],
+        [
+          "lag_2",
+          0.0484
+        ],
+        [
+          "nasa_temperature",
+          0.038
+        ],
+        [
+          "nasa_humidity",
+          0.0349
+        ],
+        [
+          "roll_14_mean",
+          0.031
+        ],
+        [
+          "wind_direction",
+          0.0265
+        ],
+        [
+          "roll_3_mean",
+          0.0243
+        ],
+        [
+          "roll_7_mean",
+          0.0189
+        ]
+      ]
+    },
+    "h30": {
+      "country": "IN",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 30,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7",
+        "temperature",
+        "humidity",
+        "wind_speed",
+        "no2_value",
+        "co_value",
+        "o3_value",
+        "so2_value",
+        "nasa_temperature",
+        "nasa_humidity",
+        "nasa_wind_speed",
+        "precipitation",
+        "wind_direction",
+        "fire_count"
+      ],
+      "feature_medians": {
+        "value": 64.8425,
+        "month": 2.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 36.0,
+        "lag_1": 64.81234615384615,
+        "lag_2": 64.77166666666666,
+        "lag_3": 64.5398,
+        "lag_7": 65.6923076923077,
+        "lag_14": 63.46714285714286,
+        "lag_21": 67.27083333333334,
+        "lag_30": 64.58146666666667,
+        "roll_3_mean": 66.97313596491227,
+        "roll_7_mean": 68.43399116380695,
+        "roll_14_mean": 69.75882561387026,
+        "roll_30_mean": 74.84810079517035,
+        "roll_3_std": 12.454409285606861,
+        "roll_14_std": 21.88765756513865,
+        "pm25_delta_1": 0.636363636363626,
+        "pm25_delta_7": -0.9531111111111166,
+        "temperature": 24.01,
+        "humidity": 58.6,
+        "wind_speed": 2.34,
+        "no2_value": 24.62,
+        "co_value": 777.9310344827586,
+        "o3_value": 23.774642857142858,
+        "so2_value": 7.944444444444445,
+        "nasa_temperature": 21.845,
+        "nasa_humidity": 58.6,
+        "nasa_wind_speed": 2.66,
+        "precipitation": 0.0,
+        "wind_direction": 140.05,
+        "fire_count": 9.0
+      },
+      "train_rows": 3462,
+      "test_rows": 1672,
+      "train_stations": 179,
+      "train_date_range": [
+        "2021-01-06",
+        "2026-01-29"
+      ],
+      "test_date_range": [
+        "2021-01-13",
+        "2026-05-17"
+      ],
+      "metrics": {
+        "train_r2": 0.8821,
+        "test_r2": 0.4286,
+        "test_mae": 21.88,
+        "test_rmse": 34.96,
+        "overfit_delta": 0.4536
+      },
+      "top_features": [
+        [
+          "value",
+          0.3591
+        ],
+        [
+          "nasa_temperature",
+          0.0948
+        ],
+        [
+          "day_of_year",
+          0.0698
+        ],
+        [
+          "roll_7_mean",
+          0.0555
+        ],
+        [
+          "nasa_humidity",
+          0.0282
+        ],
+        [
+          "no2_value",
+          0.0269
+        ],
+        [
+          "lag_1",
+          0.0256
+        ],
+        [
+          "nasa_wind_speed",
+          0.0248
+        ],
+        [
+          "lag_3",
+          0.023
+        ],
+        [
+          "lag_7",
+          0.0223
+        ]
+      ]
+    }
+  },
+  "US": {
+    "h1": {
+      "country": "US",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 1,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7"
+      ],
+      "feature_medians": {
+        "value": 6.45,
+        "month": 6.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 169.0,
+        "lag_1": 6.45,
+        "lag_2": 6.45,
+        "lag_3": 6.45,
+        "lag_7": 6.45,
+        "lag_14": 6.45,
+        "lag_21": 6.45,
+        "lag_30": 6.45,
+        "roll_3_mean": 6.733333333333328,
+        "roll_7_mean": 6.992857142857143,
+        "roll_14_mean": 7.171428571428572,
+        "roll_30_mean": 7.296666666666667,
+        "roll_3_std": 1.7088007490635073,
+        "roll_14_std": 2.8854128730750768,
+        "pm25_delta_1": 0.10000000000000053,
+        "pm25_delta_7": 0.0
+      },
+      "train_rows": 1056829,
+      "test_rows": 265240,
+      "train_stations": 1404,
+      "train_date_range": [
+        "2021-01-02",
+        "2025-10-23"
+      ],
+      "test_date_range": [
+        "2021-01-23",
+        "2026-06-15"
+      ],
+      "metrics": {
+        "train_r2": 0.5901,
+        "test_r2": 0.4566,
+        "test_mae": 2.36,
+        "test_rmse": 4.17,
+        "overfit_delta": 0.1336
+      },
+      "top_features": [
+        [
+          "value",
+          0.7991
+        ],
+        [
+          "day_of_year",
+          0.0461
+        ],
+        [
+          "roll_30_mean",
+          0.0289
+        ],
+        [
+          "pm25_delta_7",
+          0.0224
+        ],
+        [
+          "lag_1",
+          0.0137
+        ],
+        [
+          "lag_3",
+          0.0119
+        ],
+        [
+          "day_of_week",
+          0.0097
+        ],
+        [
+          "lag_14",
+          0.0081
+        ],
+        [
+          "pm25_delta_1",
+          0.008
+        ],
+        [
+          "roll_14_mean",
+          0.0078
+        ]
+      ]
+    },
+    "h7": {
+      "country": "US",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 7,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7"
+      ],
+      "feature_medians": {
+        "value": 6.45,
+        "month": 6.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 169.0,
+        "lag_1": 6.45,
+        "lag_2": 6.45,
+        "lag_3": 6.45,
+        "lag_7": 6.45,
+        "lag_14": 6.45,
+        "lag_21": 6.45,
+        "lag_30": 6.449999999999999,
+        "roll_3_mean": 6.733333333333332,
+        "roll_7_mean": 7.0,
+        "roll_14_mean": 7.178571428571429,
+        "roll_30_mean": 7.3,
+        "roll_3_std": 1.7097758137642876,
+        "roll_14_std": 2.8888202361052553,
+        "pm25_delta_1": 0.10000000000000053,
+        "pm25_delta_7": 0.0
+      },
+      "train_rows": 1025122,
+      "test_rows": 259332,
+      "train_stations": 1397,
+      "train_date_range": [
+        "2021-01-02",
+        "2025-10-12"
+      ],
+      "test_date_range": [
+        "2021-01-15",
+        "2026-06-09"
+      ],
+      "metrics": {
+        "train_r2": 0.2984,
+        "test_r2": 0.1415,
+        "test_mae": 3.19,
+        "test_rmse": 5.27,
+        "overfit_delta": 0.1569
+      },
+      "top_features": [
+        [
+          "roll_14_mean",
+          0.26
+        ],
+        [
+          "roll_30_mean",
+          0.2222
+        ],
+        [
+          "day_of_year",
+          0.1997
+        ],
+        [
+          "value",
+          0.0735
+        ],
+        [
+          "roll_3_mean",
+          0.0358
+        ],
+        [
+          "roll_7_mean",
+          0.0352
+        ],
+        [
+          "lag_14",
+          0.0282
+        ],
+        [
+          "lag_30",
+          0.0275
+        ],
+        [
+          "roll_14_std",
+          0.0221
+        ],
+        [
+          "lag_21",
+          0.0207
+        ]
+      ]
+    },
+    "h14": {
+      "country": "US",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 14,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7"
+      ],
+      "feature_medians": {
+        "value": 6.45,
+        "month": 6.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 168.0,
+        "lag_1": 6.45,
+        "lag_2": 6.45,
+        "lag_3": 6.45,
+        "lag_7": 6.45,
+        "lag_14": 6.45,
+        "lag_21": 6.449999999999999,
+        "lag_30": 6.45,
+        "roll_3_mean": 6.733333333333331,
+        "roll_7_mean": 7.0,
+        "roll_14_mean": 7.177380952380952,
+        "roll_30_mean": 7.301111111111111,
+        "roll_3_std": 1.7097758137661723,
+        "roll_14_std": 2.8901500018108113,
+        "pm25_delta_1": 0.10000000000000053,
+        "pm25_delta_7": 0.0
+      },
+      "train_rows": 1005110,
+      "test_rows": 256563,
+      "train_stations": 1401,
+      "train_date_range": [
+        "2021-01-02",
+        "2025-09-11"
+      ],
+      "test_date_range": [
+        "2021-01-17",
+        "2025-10-29"
+      ],
+      "metrics": {
+        "train_r2": 0.2592,
+        "test_r2": 0.0898,
+        "test_mae": 3.28,
+        "test_rmse": 5.43,
+        "overfit_delta": 0.1694
+      },
+      "top_features": [
+        [
+          "roll_14_mean",
+          0.4047
+        ],
+        [
+          "day_of_year",
+          0.2518
+        ],
+        [
+          "roll_30_mean",
+          0.0694
+        ],
+        [
+          "value",
+          0.0482
+        ],
+        [
+          "roll_7_mean",
+          0.0296
+        ],
+        [
+          "lag_21",
+          0.0259
+        ],
+        [
+          "lag_2",
+          0.0204
+        ],
+        [
+          "roll_14_std",
+          0.0203
+        ],
+        [
+          "lag_14",
+          0.0201
+        ],
+        [
+          "pm25_delta_7",
+          0.0176
+        ]
+      ]
+    },
+    "h30": {
+      "country": "US",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 30,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7"
+      ],
+      "feature_medians": {
+        "value": 6.5,
+        "month": 6.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 167.0,
+        "lag_1": 6.5,
+        "lag_2": 6.5,
+        "lag_3": 6.5,
+        "lag_7": 6.5,
+        "lag_14": 6.5,
+        "lag_21": 6.5,
+        "lag_30": 6.5,
+        "roll_3_mean": 6.783333333333325,
+        "roll_7_mean": 7.042857142857144,
+        "roll_14_mean": 7.214285714285714,
+        "roll_30_mean": 7.343333333333334,
+        "roll_3_std": 1.7672954855748764,
+        "roll_14_std": 2.9380415095922774,
+        "pm25_delta_1": 0.10000000000000009,
+        "pm25_delta_7": 0.0
+      },
+      "train_rows": 1027000,
+      "test_rows": 266330,
+      "train_stations": 1149,
+      "train_date_range": [
+        "2021-01-02",
+        "2025-08-13"
+      ],
+      "test_date_range": [
+        "2021-01-12",
+        "2025-10-13"
+      ],
+      "metrics": {
+        "train_r2": 0.1851,
+        "test_r2": 0.1154,
+        "test_mae": 3.25,
+        "test_rmse": 5.38,
+        "overfit_delta": 0.0697
+      },
+      "top_features": [
+        [
+          "day_of_year",
+          0.3149
+        ],
+        [
+          "roll_14_mean",
+          0.2047
+        ],
+        [
+          "roll_30_mean",
+          0.1502
+        ],
+        [
+          "roll_14_std",
+          0.0811
+        ],
+        [
+          "value",
+          0.067
+        ],
+        [
+          "roll_7_mean",
+          0.0663
+        ],
+        [
+          "lag_7",
+          0.0152
+        ],
+        [
+          "lag_30",
+          0.0134
+        ],
+        [
+          "pm25_delta_7",
+          0.0132
+        ],
+        [
+          "day_of_week",
+          0.0127
+        ]
+      ]
+    }
+  },
+  "GB": {
+    "h1": {
+      "country": "GB",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 1,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7",
+        "temperature",
+        "humidity"
+      ],
+      "feature_medians": {
+        "value": 6.5,
+        "month": 3.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 82.0,
+        "lag_1": 6.5,
+        "lag_2": 6.525229166666666,
+        "lag_3": 6.552708333333333,
+        "lag_7": 6.532979166666667,
+        "lag_14": 6.478000000000001,
+        "lag_21": 6.348229166666666,
+        "lag_30": 6.43875,
+        "roll_3_mean": 7.02701388888889,
+        "roll_7_mean": 7.508639880952382,
+        "roll_14_mean": 7.998513392857143,
+        "roll_30_mean": 8.346298055555554,
+        "roll_3_std": 2.210867535836497,
+        "roll_14_std": 3.9741941738057163,
+        "pm25_delta_1": 0.17448698202664925,
+        "pm25_delta_7": 0.1156219835918435,
+        "temperature": 16.225500007470448,
+        "humidity": 56.92730868729678
+      },
+      "train_rows": 23381,
+      "test_rows": 6095,
+      "train_stations": 317,
+      "train_date_range": [
+        "2021-01-03",
+        "2026-06-11"
+      ],
+      "test_date_range": [
+        "2021-02-06",
+        "2026-06-16"
+      ],
+      "metrics": {
+        "train_r2": 0.7067,
+        "test_r2": 0.2365,
+        "test_mae": 2.52,
+        "test_rmse": 10.14,
+        "overfit_delta": 0.4703
+      },
+      "top_features": [
+        [
+          "value",
+          0.4481
+        ],
+        [
+          "day_of_year",
+          0.1191
+        ],
+        [
+          "humidity",
+          0.0933
+        ],
+        [
+          "lag_2",
+          0.048
+        ],
+        [
+          "roll_3_mean",
+          0.0427
+        ],
+        [
+          "day_of_week",
+          0.0411
+        ],
+        [
+          "pm25_delta_1",
+          0.0363
+        ],
+        [
+          "roll_7_mean",
+          0.0293
+        ],
+        [
+          "roll_14_std",
+          0.0202
+        ],
+        [
+          "pm25_delta_7",
+          0.0189
+        ]
+      ]
+    },
+    "h7": {
+      "country": "GB",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 7,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7",
+        "temperature",
+        "humidity"
+      ],
+      "feature_medians": {
+        "value": 6.562583333333333,
+        "month": 3.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 72.0,
+        "lag_1": 6.504582184387578,
+        "lag_2": 6.485916666666667,
+        "lag_3": 6.477875,
+        "lag_7": 6.403291666666667,
+        "lag_14": 6.3522083333333335,
+        "lag_21": 6.4347916666666665,
+        "lag_30": 6.533083333333334,
+        "roll_3_mean": 6.93988888888889,
+        "roll_7_mean": 7.381553571428571,
+        "roll_14_mean": 7.888657105791035,
+        "roll_30_mean": 8.488811111111112,
+        "roll_3_std": 2.155900361205776,
+        "roll_14_std": 4.100090292279384,
+        "pm25_delta_1": 0.20841666666666647,
+        "pm25_delta_7": 0.29166666666666696,
+        "temperature": 15.659419210872265,
+        "humidity": 58.01358008079657
+      },
+      "train_rows": 19664,
+      "test_rows": 5558,
+      "train_stations": 308,
+      "train_date_range": [
+        "2021-01-03",
+        "2026-05-30"
+      ],
+      "test_date_range": [
+        "2021-01-30",
+        "2026-06-10"
+      ],
+      "metrics": {
+        "train_r2": 0.6408,
+        "test_r2": 0.2074,
+        "test_mae": 4.03,
+        "test_rmse": 9.04,
+        "overfit_delta": 0.4334
+      },
+      "top_features": [
+        [
+          "day_of_year",
+          0.4157
+        ],
+        [
+          "humidity",
+          0.1846
+        ],
+        [
+          "lag_1",
+          0.0529
+        ],
+        [
+          "value",
+          0.0434
+        ],
+        [
+          "temperature",
+          0.0347
+        ],
+        [
+          "lag_7",
+          0.0301
+        ],
+        [
+          "lag_3",
+          0.0266
+        ],
+        [
+          "roll_3_std",
+          0.0258
+        ],
+        [
+          "day_of_week",
+          0.0223
+        ],
+        [
+          "lag_2",
+          0.0214
+        ]
+      ]
+    },
+    "h14": {
+      "country": "GB",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 14,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7",
+        "temperature"
+      ],
+      "feature_medians": {
+        "value": 6.373458333333334,
+        "month": 3.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 61.0,
+        "lag_1": 6.364083333333333,
+        "lag_2": 6.375375,
+        "lag_3": 6.379189263853761,
+        "lag_7": 6.41125,
+        "lag_14": 6.428285715788958,
+        "lag_21": 6.544875,
+        "lag_30": 6.613729166666666,
+        "roll_3_mean": 6.7951458333333346,
+        "roll_7_mean": 7.345238095238095,
+        "roll_14_mean": 8.15270982142857,
+        "roll_30_mean": 8.824762305555556,
+        "roll_3_std": 2.212787048268794,
+        "roll_14_std": 4.567306336401909,
+        "pm25_delta_1": 0.15918749999999893,
+        "pm25_delta_7": 0.1257708333333336,
+        "temperature": 14.496249114197713
+      },
+      "train_rows": 16134,
+      "test_rows": 5113,
+      "train_stations": 244,
+      "train_date_range": [
+        "2021-01-03",
+        "2026-04-27"
+      ],
+      "test_date_range": [
+        "2021-01-28",
+        "2026-06-03"
+      ],
+      "metrics": {
+        "train_r2": 0.6464,
+        "test_r2": -0.0297,
+        "test_mae": 4.36,
+        "test_rmse": 10.33,
+        "overfit_delta": 0.6761
+      },
+      "top_features": [
+        [
+          "day_of_year",
+          0.481
+        ],
+        [
+          "roll_3_std",
+          0.0657
+        ],
+        [
+          "pm25_delta_1",
+          0.065
+        ],
+        [
+          "lag_2",
+          0.0536
+        ],
+        [
+          "temperature",
+          0.0422
+        ],
+        [
+          "roll_3_mean",
+          0.0413
+        ],
+        [
+          "day_of_week",
+          0.0379
+        ],
+        [
+          "value",
+          0.0346
+        ],
+        [
+          "lag_3",
+          0.0334
+        ],
+        [
+          "lag_21",
+          0.0262
+        ]
+      ]
+    },
+    "h30": {
+      "country": "GB",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 30,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7"
+      ],
+      "feature_medians": {
+        "value": 6.71,
+        "month": 2.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 42.0,
+        "lag_1": 6.623541666666667,
+        "lag_2": 6.5685,
+        "lag_3": 6.534979166666666,
+        "lag_7": 6.509520833333333,
+        "lag_14": 6.5696666666666665,
+        "lag_21": 6.3914583333333335,
+        "lag_30": 6.521166666666667,
+        "roll_3_mean": 7.036222222222222,
+        "roll_7_mean": 7.577627976190477,
+        "roll_14_mean": 8.216671130952381,
+        "roll_30_mean": 8.347541666666666,
+        "roll_3_std": 2.3670573250786027,
+        "roll_14_std": 4.447338087759624,
+        "pm25_delta_1": 0.3225,
+        "pm25_delta_7": 0.3366041666666675
+      },
+      "train_rows": 10631,
+      "test_rows": 4053,
+      "train_stations": 158,
+      "train_date_range": [
+        "2021-05-01",
+        "2026-03-28"
+      ],
+      "test_date_range": [
+        "2021-01-15",
+        "2026-05-18"
+      ],
+      "metrics": {
+        "train_r2": 0.7832,
+        "test_r2": -0.4636,
+        "test_mae": 6.7,
+        "test_rmse": 15.66,
+        "overfit_delta": 1.2468
+      },
+      "top_features": [
+        [
+          "day_of_year",
+          0.6317
+        ],
+        [
+          "value",
+          0.0569
+        ],
+        [
+          "roll_3_std",
+          0.0488
+        ],
+        [
+          "pm25_delta_1",
+          0.0429
+        ],
+        [
+          "month",
+          0.0408
+        ],
+        [
+          "day_of_week",
+          0.0321
+        ],
+        [
+          "pm25_delta_7",
+          0.0244
+        ],
+        [
+          "lag_2",
+          0.0221
+        ],
+        [
+          "lag_3",
+          0.0162
+        ],
+        [
+          "lag_1",
+          0.0143
+        ]
+      ]
+    }
+  },
+  "AU": {
+    "h1": {
+      "country": "AU",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 1,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7"
+      ],
+      "feature_medians": {
+        "value": 5.116083,
+        "month": 6.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 172.0,
+        "lag_1": 5.107917,
+        "lag_2": 5.108229,
+        "lag_3": 5.10775,
+        "lag_7": 5.108229,
+        "lag_14": 5.11751,
+        "lag_21": 5.120708,
+        "lag_30": 5.114667,
+        "roll_3_mean": 5.264500000000003,
+        "roll_7_mean": 5.389423142857142,
+        "roll_14_mean": 5.489211857142857,
+        "roll_30_mean": 5.584759416666667,
+        "roll_3_std": 1.448146202589204,
+        "roll_14_std": 2.1943933195835856,
+        "pm25_delta_1": 0.07897949999999998,
+        "pm25_delta_7": 0.01580399979498474
+      },
+      "train_rows": 63977,
+      "test_rows": 16110,
+      "train_stations": 167,
+      "train_date_range": [
+        "2021-01-02",
+        "2026-06-10"
+      ],
+      "test_date_range": [
+        "2021-09-05",
+        "2026-06-16"
+      ],
+      "metrics": {
+        "train_r2": 0.5082,
+        "test_r2": 0.3398,
+        "test_mae": 2.06,
+        "test_rmse": 3.01,
+        "overfit_delta": 0.1684
+      },
+      "top_features": [
+        [
+          "value",
+          0.677
+        ],
+        [
+          "day_of_year",
+          0.0633
+        ],
+        [
+          "lag_1",
+          0.0331
+        ],
+        [
+          "roll_30_mean",
+          0.0309
+        ],
+        [
+          "roll_14_mean",
+          0.0244
+        ],
+        [
+          "lag_3",
+          0.02
+        ],
+        [
+          "roll_3_std",
+          0.0191
+        ],
+        [
+          "pm25_delta_1",
+          0.0181
+        ],
+        [
+          "roll_14_std",
+          0.0169
+        ],
+        [
+          "day_of_week",
+          0.0168
+        ]
+      ]
+    },
+    "h7": {
+      "country": "AU",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 7,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7"
+      ],
+      "feature_medians": {
+        "value": 5.1250625,
+        "month": 6.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 174.0,
+        "lag_1": 5.123021,
+        "lag_2": 5.126167,
+        "lag_3": 5.130458,
+        "lag_7": 5.1202705,
+        "lag_14": 5.128583,
+        "lag_21": 5.119762,
+        "lag_30": 5.119167,
+        "roll_3_mean": 5.280472,
+        "roll_7_mean": 5.396684571428572,
+        "roll_14_mean": 5.495035785714285,
+        "roll_30_mean": 5.581333600000001,
+        "roll_3_std": 1.451226545821404,
+        "roll_14_std": 2.1974228057245027,
+        "pm25_delta_1": 0.0806249999999995,
+        "pm25_delta_7": 0.015974500000000003
+      },
+      "train_rows": 61118,
+      "test_rows": 15611,
+      "train_stations": 157,
+      "train_date_range": [
+        "2021-01-02",
+        "2026-05-31"
+      ],
+      "test_date_range": [
+        "2021-09-26",
+        "2026-06-10"
+      ],
+      "metrics": {
+        "train_r2": 0.3835,
+        "test_r2": 0.063,
+        "test_mae": 2.46,
+        "test_rmse": 3.57,
+        "overfit_delta": 0.3205
+      },
+      "top_features": [
+        [
+          "day_of_year",
+          0.2689
+        ],
+        [
+          "roll_30_mean",
+          0.2672
+        ],
+        [
+          "value",
+          0.0736
+        ],
+        [
+          "roll_14_std",
+          0.0596
+        ],
+        [
+          "roll_7_mean",
+          0.0552
+        ],
+        [
+          "roll_14_mean",
+          0.0328
+        ],
+        [
+          "lag_30",
+          0.0319
+        ],
+        [
+          "roll_3_mean",
+          0.0284
+        ],
+        [
+          "lag_21",
+          0.0243
+        ],
+        [
+          "lag_3",
+          0.024
+        ]
+      ]
+    },
+    "h14": {
+      "country": "AU",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 14,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7"
+      ],
+      "feature_medians": {
+        "value": 5.12515,
+        "month": 6.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 176.0,
+        "lag_1": 5.1243335000000005,
+        "lag_2": 5.122318,
+        "lag_3": 5.1258275,
+        "lag_7": 5.1262085,
+        "lag_14": 5.116375,
+        "lag_21": 5.1172915,
+        "lag_30": 5.1185835,
+        "roll_3_mean": 5.269235999999999,
+        "roll_7_mean": 5.392738428571429,
+        "roll_14_mean": 5.489163107142857,
+        "roll_30_mean": 5.572214833333334,
+        "roll_3_std": 1.4523368799016179,
+        "roll_14_std": 2.197714736511915,
+        "pm25_delta_1": 0.08724949999999998,
+        "pm25_delta_7": 0.009359999999999813
+      },
+      "train_rows": 59276,
+      "test_rows": 15317,
+      "train_stations": 58,
+      "train_date_range": [
+        "2021-01-02",
+        "2026-02-21"
+      ],
+      "test_date_range": [
+        "2021-09-21",
+        "2026-06-03"
+      ],
+      "metrics": {
+        "train_r2": 0.3786,
+        "test_r2": 0.0131,
+        "test_mae": 2.52,
+        "test_rmse": 3.66,
+        "overfit_delta": 0.3655
+      },
+      "top_features": [
+        [
+          "day_of_year",
+          0.2818
+        ],
+        [
+          "roll_30_mean",
+          0.2711
+        ],
+        [
+          "roll_14_std",
+          0.0649
+        ],
+        [
+          "roll_7_mean",
+          0.0425
+        ],
+        [
+          "lag_30",
+          0.0385
+        ],
+        [
+          "lag_21",
+          0.038
+        ],
+        [
+          "roll_14_mean",
+          0.0365
+        ],
+        [
+          "value",
+          0.0349
+        ],
+        [
+          "day_of_week",
+          0.0305
+        ],
+        [
+          "lag_3",
+          0.0266
+        ]
+      ]
+    },
+    "h30": {
+      "country": "AU",
+      "model": "GradientBoostingRegressor",
+      "version": "v6",
+      "horizon_days": 30,
+      "features": [
+        "value",
+        "month",
+        "day_of_week",
+        "is_weekend",
+        "day_of_year",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_7",
+        "lag_14",
+        "lag_21",
+        "lag_30",
+        "roll_3_mean",
+        "roll_7_mean",
+        "roll_14_mean",
+        "roll_30_mean",
+        "roll_3_std",
+        "roll_14_std",
+        "pm25_delta_1",
+        "pm25_delta_7"
+      ],
+      "feature_medians": {
+        "value": 5.116875,
+        "month": 6.0,
+        "day_of_week": 3.0,
+        "is_weekend": 0.0,
+        "day_of_year": 173.0,
+        "lag_1": 5.113583,
+        "lag_2": 5.113583,
+        "lag_3": 5.106417,
+        "lag_7": 5.1079795,
+        "lag_14": 5.1120415,
+        "lag_21": 5.102833,
+        "lag_30": 5.094667,
+        "roll_3_mean": 5.255583333333333,
+        "roll_7_mean": 5.3722290714285705,
+        "roll_14_mean": 5.471104214285715,
+        "roll_30_mean": 5.553069633333333,
+        "roll_3_std": 1.4540436259949656,
+        "roll_14_std": 2.1973983600116673,
+        "pm25_delta_1": 0.0887500000000001,
+        "pm25_delta_7": 0.008333499999999994
+      },
+      "train_rows": 57571,
+      "test_rows": 14772,
+      "train_stations": 48,
+      "train_date_range": [
+        "2021-01-02",
+        "2025-10-10"
+      ],
+      "test_date_range": [
+        "2021-01-15",
+        "2025-11-30"
+      ],
+      "metrics": {
+        "train_r2": 0.3776,
+        "test_r2": -0.0279,
+        "test_mae": 2.56,
+        "test_rmse": 3.73,
+        "overfit_delta": 0.4055
+      },
+      "top_features": [
+        [
+          "day_of_year",
+          0.2961
+        ],
+        [
+          "roll_30_mean",
+          0.2118
+        ],
+        [
+          "roll_14_mean",
+          0.1289
+        ],
+        [
+          "roll_7_mean",
+          0.057
+        ],
+        [
+          "roll_14_std",
+          0.0389
+        ],
+        [
+          "lag_14",
+          0.037
+        ],
+        [
+          "value",
+          0.034
+        ],
+        [
+          "lag_30",
+          0.0292
+        ],
+        [
+          "day_of_week",
+          0.0242
+        ],
+        [
+          "lag_7",
+          0.0224
+        ]
+      ]
+    }
+  }
+}

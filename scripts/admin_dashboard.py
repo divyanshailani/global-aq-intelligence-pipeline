@@ -157,7 +157,8 @@ async def get_status():
 
         # ── Model metadata from JSON ──
         models = {}
-        meta_file = os.path.join(MODEL_DIR, "all_models_meta.json")
+        v6_model_dir = os.path.join(BASE_DIR, "models", "v6")
+        meta_file = os.path.join(v6_model_dir, "all_models_meta.json")
         if os.path.exists(meta_file):
             with open(meta_file) as f:
                 models = json.load(f)
@@ -165,7 +166,7 @@ async def get_status():
         # ── Last retrain date ──
         last_retrain = None
         for cc in ["IN", "US", "GB", "AU"]:
-            pkl = os.path.join(MODEL_DIR, f"{cc}_pm25_gbr.pkl")
+            pkl = os.path.join(v6_model_dir, f"{cc}_pm25_h1_gbr.pkl")
             if os.path.exists(pkl):
                 mtime = datetime.fromtimestamp(os.path.getmtime(pkl))
                 if last_retrain is None or mtime > last_retrain:
@@ -462,10 +463,10 @@ async def retrain(background_tasks: BackgroundTasks):
 def _run_retrain():
     try:
         add_log("═══ STEP 4: RETRAIN MODELS ═══")
-        add_log("Running train_v5.py (per-country GBR)...")
+        add_log("Running train_v6.py (v6 direct-horizon models)...")
 
         result = subprocess.run(
-            [sys.executable, os.path.join(SCRIPTS_DIR, "train_v5.py")],
+            [sys.executable, os.path.join(SCRIPTS_DIR, "train_v6.py")],
             capture_output=True, text=True, timeout=1200,
             cwd=BASE_DIR,
         )
@@ -474,7 +475,7 @@ def _run_retrain():
                 add_log(line.strip())
 
         if result.returncode == 0:
-            add_log("✅ RETRAIN COMPLETE — new models saved to models/v5/")
+            add_log("✅ RETRAIN COMPLETE — new models saved to models/v6/")
             pipeline_state["result"] = "success"
         else:
             add_log(f"❌ Train error: {result.stderr[:500]}")
@@ -754,7 +755,7 @@ ADMIN_HTML = """<!DOCTYPE html>
                 <div id="dataHealth">Loading...</div>
             </div>
             <div class="card">
-                <div class="card-title">🧠 Model Performance (v5)</div>
+                <div class="card-title">🧠 Model Performance (v6)</div>
                 <div id="modelPerf">Loading...</div>
             </div>
         </div>
@@ -817,7 +818,8 @@ ADMIN_HTML = """<!DOCTYPE html>
                 let mp = '';
                 const models = d.models;
                 for (const cc of ['IN','US','GB','AU']) {
-                    const m = models?.[cc];
+                    // Try v6 format first (models[cc].h1.metrics), fallback to v5 flat format
+                    const m = models?.[cc]?.h1?.metrics || models?.[cc];
                     const r2 = m?.test_r2 ?? m?.r2 ?? '—';
                     const mae = m?.test_mae ?? m?.mae ?? '—';
                     const r2Color = r2 >= 0.7 ? 'var(--green)' : r2 >= 0.5 ? 'var(--amber)' : 'var(--red)';

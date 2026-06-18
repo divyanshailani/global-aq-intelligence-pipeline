@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-06-18T10:33:11.838292",
-  "mae": 9.95,
-  "r2": 0.1004,
+  "generated_at": "2026-06-18T13:48:32.811618",
+  "mae": 3.79,
+  "r2": 0.832,
   "source": "backtest",
   "sample_count": 6922,
   "live_validation_count": 0,

@@ -1,0 +1,136 @@
+{
+  "country": "IN",
+  "model": "GradientBoostingRegressor",
+  "version": "v6",
+  "horizon_days": 1,
+  "features": [
+    "value",
+    "month",
+    "day_of_week",
+    "is_weekend",
+    "day_of_year",
+    "lag_1",
+    "lag_2",
+    "lag_3",
+    "lag_7",
+    "lag_14",
+    "lag_21",
+    "lag_30",
+    "roll_3_mean",
+    "roll_7_mean",
+    "roll_14_mean",
+    "roll_30_mean",
+    "roll_3_std",
+    "roll_14_std",
+    "pm25_delta_1",
+    "pm25_delta_7",
+    "temperature",
+    "humidity",
+    "wind_speed",
+    "no2_value",
+    "co_value",
+    "o3_value",
+    "so2_value",
+    "nasa_temperature",
+    "nasa_humidity",
+    "nasa_wind_speed",
+    "precipitation",
+    "wind_direction",
+    "fire_count"
+  ],
+  "feature_medians": {
+    "value": 49.92590909090909,
+    "month": 3.0,
+    "day_of_week": 3.0,
+    "is_weekend": 0.0,
+    "day_of_year": 67.0,
+    "lag_1": 50.434999999999995,
+    "lag_2": 50.81075757575757,
+    "lag_3": 51.03272058823529,
+    "lag_7": 51.87863636363636,
+    "lag_14": 52.9375,
+    "lag_21": 54.57142857142857,
+    "lag_30": 56.0,
+    "roll_3_mean": 51.99824074074074,
+    "roll_7_mean": 53.48060386427298,
+    "roll_14_mean": 54.85572529390544,
+    "roll_30_mean": 55.95413832562083,
+    "roll_3_std": 10.103633078800877,
+    "roll_14_std": 17.997957146151897,
+    "pm25_delta_1": 0.022619047619045318,
+    "pm25_delta_7": -1.2100000000000009,
+    "temperature": 25.22,
+    "humidity": 53.77066666666667,
+    "wind_speed": 1.63,
+    "no2_value": 19.9225,
+    "co_value": 562.8174603174604,
+    "o3_value": 24.95422222222222,
+    "so2_value": 8.26,
+    "nasa_temperature": 25.03,
+    "nasa_humidity": 53.845,
+    "nasa_wind_speed": 2.82,
+    "precipitation": 0.0,
+    "wind_direction": 229.7,
+    "fire_count": 9.0
+  },
+  "train_rows": 20227,
+  "test_rows": 5414,
+  "train_stations": 517,
+  "train_date_range": [
+    "2021-01-01",
+    "2026-06-11"
+  ],
+  "test_date_range": [
+    "2021-01-18",
+    "2026-06-16"
+  ],
+  "metrics": {
+    "train_r2": 0.8763,
+    "test_r2": 0.751,
+    "test_mae": 9.39,
+    "test_rmse": 16.62,
+    "overfit_delta": 0.1254
+  },
+  "top_features": [
+    [
+      "value",
+      0.8195
+    ],
+    [
+      "lag_1",
+      0.0255
+    ],
+    [
+      "nasa_temperature",
+      0.0218
+    ],
+    [
+      "day_of_year",
+      0.0147
+    ],
+    [
+      "roll_3_mean",
+      0.0116
+    ],
+    [
+      "roll_7_mean",
+      0.0088
+    ],
+    [
+      "lag_3",
+      0.0078
+    ],
+    [
+      "nasa_humidity",
+      0.007
+    ],
+    [
+      "roll_14_mean",
+      0.0067
+    ],
+    [
+      "pm25_delta_1",
+      0.0054
+    ]
+  ]
+}

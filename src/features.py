@@ -70,7 +70,7 @@ def add_time_features(daily):
 
 
 # ─── Step 4: Add Lag Features ─────────────────────────────
-def add_lag_features(daily, target_col, lags=[1, 2, 3, 7]):
+def add_lag_features(daily, target_col, lags=[1, 2, 3, 7, 14, 21, 30]):
     """
     Add lagged versions of the target column.
     lag_1 = yesterday's value, lag_7 = last week's value.
@@ -81,7 +81,7 @@ def add_lag_features(daily, target_col, lags=[1, 2, 3, 7]):
 
 
 # ─── Step 5: Add Rolling Features ─────────────────────────
-def add_rolling_features(daily, target_col, windows=[3, 7]):
+def add_rolling_features(daily, target_col, windows=[3, 7, 14, 30]):
     """
     Add rolling mean and std for the target column.
     IMPORTANT: Shift by 1 day BEFORE rolling to prevent data leakage.
@@ -90,8 +90,26 @@ def add_rolling_features(daily, target_col, windows=[3, 7]):
     shifted = daily[target_col].shift(1)  # exclude current day
     for w in windows:
         daily[f"roll_{w}_mean"] = shifted.rolling(w).mean()
-    # Only add std for shortest window (volatility indicator)
-    daily["roll_3_std"] = shifted.rolling(3).std()
+    # Rolling std for volatility context at key windows
+    daily["roll_3_std"]  = shifted.rolling(3).std()
+    daily["roll_14_std"] = shifted.rolling(14).std()
+    return daily
+
+
+# ─── Step 5b: Add Momentum / Delta Features ───────────────
+def add_delta_features(daily, target_col):
+    """
+    Add first-difference momentum features — all lag-shifted, no leakage.
+
+    pm25_delta_1 = short-term momentum: yesterday vs the day before
+    pm25_delta_7 = weekly momentum: yesterday vs last week
+    Positive = rising pollution, negative = falling.
+    """
+    lag1 = daily[target_col].shift(1)
+    lag2 = daily[target_col].shift(2)
+    lag7 = daily[target_col].shift(7)
+    daily["pm25_delta_1"] = lag1 - lag2
+    daily["pm25_delta_7"] = lag1 - lag7
     return daily
 
 
@@ -162,6 +180,9 @@ def build_features_for_station(conn, station_id, target_param="pm25"):
     # Add rolling features for target
     daily = add_rolling_features(daily, target_param)
 
+    # Add momentum features (delta / first-difference)
+    daily = add_delta_features(daily, target_param)
+
     # Extract cross-parameter features
     cross = extract_cross_features(daily)
 
@@ -178,15 +199,22 @@ def build_features_for_station(conn, station_id, target_param="pm25"):
     features["is_weekend"] = daily["is_weekend"]
     features["day_of_year"] = daily["day_of_year"]
 
-    # Lag features
-    for lag in [1, 2, 3, 7]:
+    # Lag features — short + long range
+    for lag in [1, 2, 3, 7, 14, 21, 30]:
         col = f"lag_{lag}"
         features[col] = daily[col] if col in daily.columns else None
 
-    # Rolling features
-    features["roll_3_mean"] = daily.get("roll_3_mean")
-    features["roll_7_mean"] = daily.get("roll_7_mean")
-    features["roll_3_std"] = daily.get("roll_3_std")
+    # Rolling features — 3d, 7d, 14d, 30d
+    features["roll_3_mean"]  = daily.get("roll_3_mean")
+    features["roll_7_mean"]  = daily.get("roll_7_mean")
+    features["roll_3_std"]   = daily.get("roll_3_std")
+    features["roll_14_mean"] = daily.get("roll_14_mean")
+    features["roll_30_mean"] = daily.get("roll_30_mean")
+    features["roll_14_std"]  = daily.get("roll_14_std")
+
+    # Momentum / delta features
+    features["pm25_delta_1"] = daily.get("pm25_delta_1")
+    features["pm25_delta_7"] = daily.get("pm25_delta_7")
 
     # Cross-parameter features
     for feature_name, values in cross.items():
@@ -209,26 +237,37 @@ def insert_features(conn, features_df):
             (date, station_id, parameter, value,
              month, day_of_week, is_weekend, day_of_year,
              lag_1, lag_2, lag_3, lag_7,
+             lag_14, lag_21, lag_30,
              roll_3_mean, roll_7_mean, roll_3_std,
+             roll_14_mean, roll_30_mean, roll_14_std,
+             pm25_delta_1, pm25_delta_7,
              temperature, humidity, wind_speed,
              no2_value, co_value, o3_value, so2_value)
         VALUES %s
         ON CONFLICT (date, station_id, parameter) DO UPDATE SET
-            value = EXCLUDED.value,
-            lag_1 = EXCLUDED.lag_1,
-            lag_2 = EXCLUDED.lag_2,
-            lag_3 = EXCLUDED.lag_3,
-            lag_7 = EXCLUDED.lag_7,
-            roll_3_mean = EXCLUDED.roll_3_mean,
-            roll_7_mean = EXCLUDED.roll_7_mean,
-            roll_3_std = EXCLUDED.roll_3_std,
-            temperature = COALESCE(EXCLUDED.temperature, daily_features.temperature),
-            humidity = COALESCE(EXCLUDED.humidity, daily_features.humidity),
-            wind_speed = COALESCE(EXCLUDED.wind_speed, daily_features.wind_speed),
-            no2_value = EXCLUDED.no2_value,
-            co_value = EXCLUDED.co_value,
-            o3_value = EXCLUDED.o3_value,
-            so2_value = EXCLUDED.so2_value
+            value        = EXCLUDED.value,
+            lag_1        = EXCLUDED.lag_1,
+            lag_2        = EXCLUDED.lag_2,
+            lag_3        = EXCLUDED.lag_3,
+            lag_7        = EXCLUDED.lag_7,
+            lag_14       = EXCLUDED.lag_14,
+            lag_21       = EXCLUDED.lag_21,
+            lag_30       = EXCLUDED.lag_30,
+            roll_3_mean  = EXCLUDED.roll_3_mean,
+            roll_7_mean  = EXCLUDED.roll_7_mean,
+            roll_3_std   = EXCLUDED.roll_3_std,
+            roll_14_mean = EXCLUDED.roll_14_mean,
+            roll_30_mean = EXCLUDED.roll_30_mean,
+            roll_14_std  = EXCLUDED.roll_14_std,
+            pm25_delta_1 = EXCLUDED.pm25_delta_1,
+            pm25_delta_7 = EXCLUDED.pm25_delta_7,
+            temperature  = COALESCE(EXCLUDED.temperature, daily_features.temperature),
+            humidity     = COALESCE(EXCLUDED.humidity, daily_features.humidity),
+            wind_speed   = COALESCE(EXCLUDED.wind_speed, daily_features.wind_speed),
+            no2_value    = EXCLUDED.no2_value,
+            co_value     = EXCLUDED.co_value,
+            o3_value     = EXCLUDED.o3_value,
+            so2_value    = EXCLUDED.so2_value
     """
 
     values = []
@@ -239,7 +278,10 @@ def insert_features(conn, features_df):
             bool(row.get("is_weekend")) if pd.notna(row.get("is_weekend")) else None,
             row.get("day_of_year"),
             row.get("lag_1"), row.get("lag_2"), row.get("lag_3"), row.get("lag_7"),
+            row.get("lag_14"), row.get("lag_21"), row.get("lag_30"),
             row.get("roll_3_mean"), row.get("roll_7_mean"), row.get("roll_3_std"),
+            row.get("roll_14_mean"), row.get("roll_30_mean"), row.get("roll_14_std"),
+            row.get("pm25_delta_1"), row.get("pm25_delta_7"),
             row.get("temperature"), row.get("humidity"), row.get("wind_speed"),
             row.get("no2_value"), row.get("co_value"),
             row.get("o3_value"), row.get("so2_value"),
@@ -252,6 +294,26 @@ def insert_features(conn, features_df):
 
 
 # ─── Main Entry Point ────────────────────────────────────
+def ensure_v6_columns(conn):
+    """
+    Add v6 extended feature columns to daily_features if they don't exist.
+    Safe to call multiple times — uses ADD COLUMN IF NOT EXISTS.
+    """
+    with conn.cursor() as cur:
+        cur.execute("""
+            ALTER TABLE daily_features
+                ADD COLUMN IF NOT EXISTS lag_14       DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS lag_21       DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS lag_30       DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS roll_14_mean DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS roll_30_mean DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS roll_14_std  DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS pm25_delta_1 DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS pm25_delta_7 DOUBLE PRECISION
+        """)
+    conn.commit()
+
+
 def run_feature_pipeline(conn, station_ids=None, target_params=None):
     """
     Run feature engineering on all (or specified) stations.
@@ -263,6 +325,9 @@ def run_feature_pipeline(conn, station_ids=None, target_params=None):
     """
     if target_params is None:
         target_params = ["pm25", "pm10"]
+
+    # Ensure v6 columns exist before writing
+    ensure_v6_columns(conn)
 
     if station_ids is None:
         with conn.cursor() as cur:

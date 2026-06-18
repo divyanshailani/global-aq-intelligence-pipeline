@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-18T10:33:11.838184",
+  "generated_at": "2026-06-18T13:48:32.811510",
   "model_version": "v5",
   "countries": {
     "IN": {
@@ -56,8 +56,8 @@
     }
   },
   "accuracy": {
-    "mae": 9.95,
-    "r2": 0.1004,
+    "mae": 3.79,
+    "r2": 0.832,
     "source": "backtest",
     "sample_count": 6922,
     "live_validation_count": 0,
