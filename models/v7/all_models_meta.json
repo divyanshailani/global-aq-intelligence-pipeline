@@ -1,579 +1,9 @@
 {
-  "IN": {
-    "h1": {
-      "country": "IN",
-      "model": "GradientBoostingRegressor",
-      "version": "v6",
-      "horizon_days": 1,
-      "features": [
-        "value",
-        "month",
-        "day_of_week",
-        "is_weekend",
-        "day_of_year",
-        "lag_1",
-        "lag_2",
-        "lag_3",
-        "lag_7",
-        "lag_14",
-        "lag_21",
-        "lag_30",
-        "roll_3_mean",
-        "roll_7_mean",
-        "roll_14_mean",
-        "roll_30_mean",
-        "roll_3_std",
-        "roll_14_std",
-        "pm25_delta_1",
-        "pm25_delta_7",
-        "temperature",
-        "humidity",
-        "wind_speed",
-        "no2_value",
-        "co_value",
-        "o3_value",
-        "so2_value",
-        "nasa_temperature",
-        "nasa_humidity",
-        "nasa_wind_speed",
-        "precipitation",
-        "wind_direction",
-        "fire_count",
-        "future_temp",
-        "future_wind",
-        "future_precip"
-      ],
-      "feature_medians": {
-        "value": 49.92590909090909,
-        "month": 3.0,
-        "day_of_week": 3.0,
-        "is_weekend": 0.0,
-        "day_of_year": 67.0,
-        "lag_1": 50.434999999999995,
-        "lag_2": 50.81075757575757,
-        "lag_3": 51.03272058823529,
-        "lag_7": 51.87863636363636,
-        "lag_14": 52.9375,
-        "lag_21": 54.57142857142857,
-        "lag_30": 56.0,
-        "roll_3_mean": 51.99824074074074,
-        "roll_7_mean": 53.48060386427298,
-        "roll_14_mean": 54.85572529390544,
-        "roll_30_mean": 55.95413832562083,
-        "roll_3_std": 10.103633078800877,
-        "roll_14_std": 17.997957146151897,
-        "pm25_delta_1": 0.022619047619045318,
-        "pm25_delta_7": -1.2100000000000009,
-        "temperature": 25.22,
-        "humidity": 53.77066666666667,
-        "wind_speed": 1.63,
-        "no2_value": 19.9225,
-        "co_value": 562.8174603174604,
-        "o3_value": 24.95422222222222,
-        "so2_value": 8.26,
-        "nasa_temperature": 25.03,
-        "nasa_humidity": 53.845,
-        "nasa_wind_speed": 2.82,
-        "precipitation": 0.0,
-        "wind_direction": 229.7,
-        "fire_count": 9.0,
-        "future_temp": 24.9,
-        "future_wind": 14.6,
-        "future_precip": 0.0
-      },
-      "train_rows": 20227,
-      "test_rows": 5414,
-      "train_stations": 517,
-      "train_date_range": [
-        "2021-01-01",
-        "2026-06-11"
-      ],
-      "test_date_range": [
-        "2021-01-18",
-        "2026-06-16"
-      ],
-      "metrics": {
-        "train_r2": 0.883,
-        "test_r2": 0.7584,
-        "test_mae": 9.26,
-        "test_rmse": 16.37,
-        "overfit_delta": 0.1246
-      },
-      "top_features": [
-        [
-          "value",
-          0.8089
-        ],
-        [
-          "lag_1",
-          0.0271
-        ],
-        [
-          "future_wind",
-          0.0183
-        ],
-        [
-          "nasa_temperature",
-          0.018
-        ],
-        [
-          "roll_3_mean",
-          0.0114
-        ],
-        [
-          "roll_7_mean",
-          0.0092
-        ],
-        [
-          "day_of_year",
-          0.0087
-        ],
-        [
-          "lag_3",
-          0.0077
-        ],
-        [
-          "future_precip",
-          0.0068
-        ],
-        [
-          "future_temp",
-          0.0061
-        ]
-      ]
-    },
-    "h7": {
-      "country": "IN",
-      "model": "GradientBoostingRegressor",
-      "version": "v6",
-      "horizon_days": 7,
-      "features": [
-        "value",
-        "month",
-        "day_of_week",
-        "is_weekend",
-        "day_of_year",
-        "lag_1",
-        "lag_2",
-        "lag_3",
-        "lag_7",
-        "lag_14",
-        "lag_21",
-        "lag_30",
-        "roll_3_mean",
-        "roll_7_mean",
-        "roll_14_mean",
-        "roll_30_mean",
-        "roll_3_std",
-        "roll_14_std",
-        "pm25_delta_1",
-        "pm25_delta_7",
-        "temperature",
-        "humidity",
-        "wind_speed",
-        "no2_value",
-        "co_value",
-        "o3_value",
-        "so2_value",
-        "nasa_temperature",
-        "nasa_humidity",
-        "nasa_wind_speed",
-        "precipitation",
-        "wind_direction",
-        "fire_count",
-        "future_temp",
-        "future_wind",
-        "future_precip"
-      ],
-      "feature_medians": {
-        "value": 54.6875,
-        "month": 3.0,
-        "day_of_week": 3.0,
-        "is_weekend": 0.0,
-        "day_of_year": 68.0,
-        "lag_1": 55.03,
-        "lag_2": 55.61666666666667,
-        "lag_3": 55.64723602484472,
-        "lag_7": 56.091864867122084,
-        "lag_14": 57.37958975791931,
-        "lag_21": 59.0,
-        "lag_30": 62.153333333333336,
-        "roll_3_mean": 56.6182264957265,
-        "roll_7_mean": 58.185452380952384,
-        "roll_14_mean": 59.503099463818955,
-        "roll_30_mean": 63.83243950304869,
-        "roll_3_std": 11.146120466430851,
-        "roll_14_std": 18.79442996499808,
-        "pm25_delta_1": 0.0,
-        "pm25_delta_7": -1.1213235294117645,
-        "temperature": 25.28,
-        "humidity": 53.098719713503264,
-        "wind_speed": 2.56,
-        "no2_value": 20.56041666666667,
-        "co_value": 730.0,
-        "o3_value": 22.814444444444447,
-        "so2_value": 7.766666666666667,
-        "nasa_temperature": 24.9,
-        "nasa_humidity": 56.71,
-        "nasa_wind_speed": 2.83,
-        "precipitation": 0.0,
-        "wind_direction": 236.0,
-        "fire_count": 9.0,
-        "future_temp": 24.6,
-        "future_wind": 14.7,
-        "future_precip": 0.0
-      },
-      "train_rows": 10897,
-      "test_rows": 3187,
-      "train_stations": 316,
-      "train_date_range": [
-        "2021-01-01",
-        "2026-03-28"
-      ],
-      "test_date_range": [
-        "2021-01-14",
-        "2026-06-10"
-      ],
-      "metrics": {
-        "train_r2": 0.8539,
-        "test_r2": 0.5428,
-        "test_mae": 17.29,
-        "test_rmse": 29.84,
-        "overfit_delta": 0.3111
-      },
-      "top_features": [
-        [
-          "value",
-          0.2834
-        ],
-        [
-          "roll_3_mean",
-          0.2555
-        ],
-        [
-          "future_temp",
-          0.101
-        ],
-        [
-          "day_of_year",
-          0.0623
-        ],
-        [
-          "future_wind",
-          0.0349
-        ],
-        [
-          "lag_1",
-          0.0255
-        ],
-        [
-          "lag_3",
-          0.0203
-        ],
-        [
-          "wind_direction",
-          0.0183
-        ],
-        [
-          "roll_7_mean",
-          0.0171
-        ],
-        [
-          "nasa_temperature",
-          0.0141
-        ]
-      ]
-    },
-    "h14": {
-      "country": "IN",
-      "model": "GradientBoostingRegressor",
-      "version": "v6",
-      "horizon_days": 14,
-      "features": [
-        "value",
-        "month",
-        "day_of_week",
-        "is_weekend",
-        "day_of_year",
-        "lag_1",
-        "lag_2",
-        "lag_3",
-        "lag_7",
-        "lag_14",
-        "lag_21",
-        "lag_30",
-        "roll_3_mean",
-        "roll_7_mean",
-        "roll_14_mean",
-        "roll_30_mean",
-        "roll_3_std",
-        "roll_14_std",
-        "pm25_delta_1",
-        "pm25_delta_7",
-        "temperature",
-        "humidity",
-        "wind_speed",
-        "no2_value",
-        "co_value",
-        "o3_value",
-        "so2_value",
-        "nasa_temperature",
-        "nasa_humidity",
-        "nasa_wind_speed",
-        "precipitation",
-        "wind_direction",
-        "fire_count",
-        "future_temp",
-        "future_wind",
-        "future_precip"
-      ],
-      "feature_medians": {
-        "value": 60.29230769230769,
-        "month": 2.0,
-        "day_of_week": 3.0,
-        "is_weekend": 0.0,
-        "day_of_year": 53.0,
-        "lag_1": 60.51428571428572,
-        "lag_2": 61.0,
-        "lag_3": 61.5,
-        "lag_7": 62.778999999999996,
-        "lag_14": 63.449444444444445,
-        "lag_21": 64.98277777777778,
-        "lag_30": 64.58333333333333,
-        "roll_3_mean": 62.38645604395604,
-        "roll_7_mean": 64.52097619047619,
-        "roll_14_mean": 66.64973709463297,
-        "roll_30_mean": 66.89489199442056,
-        "roll_3_std": 12.371329236012937,
-        "roll_14_std": 20.834112867237593,
-        "pm25_delta_1": 0.0,
-        "pm25_delta_7": -3.800833333333344,
-        "temperature": 25.215,
-        "humidity": 53.62317628300442,
-        "wind_speed": 2.53,
-        "no2_value": 22.9625,
-        "co_value": 789.5238095238095,
-        "o3_value": 24.775000000000002,
-        "so2_value": 8.2,
-        "nasa_temperature": 23.85,
-        "nasa_humidity": 53.3,
-        "nasa_wind_speed": 2.79,
-        "precipitation": 0.0,
-        "wind_direction": 230.2,
-        "fire_count": 9.0,
-        "future_temp": 24.2,
-        "future_wind": 14.8,
-        "future_precip": 0.0
-      },
-      "train_rows": 6315,
-      "test_rows": 2271,
-      "train_stations": 286,
-      "train_date_range": [
-        "2021-01-01",
-        "2026-03-07"
-      ],
-      "test_date_range": [
-        "2021-01-22",
-        "2026-05-12"
-      ],
-      "metrics": {
-        "train_r2": 0.8389,
-        "test_r2": 0.6076,
-        "test_mae": 19.43,
-        "test_rmse": 30.44,
-        "overfit_delta": 0.2313
-      },
-      "top_features": [
-        [
-          "value",
-          0.275
-        ],
-        [
-          "lag_1",
-          0.1514
-        ],
-        [
-          "day_of_year",
-          0.0945
-        ],
-        [
-          "future_temp",
-          0.061
-        ],
-        [
-          "lag_2",
-          0.0509
-        ],
-        [
-          "future_wind",
-          0.0439
-        ],
-        [
-          "roll_3_mean",
-          0.0241
-        ],
-        [
-          "roll_14_mean",
-          0.0233
-        ],
-        [
-          "nasa_humidity",
-          0.023
-        ],
-        [
-          "roll_7_mean",
-          0.0217
-        ]
-      ]
-    },
-    "h30": {
-      "country": "IN",
-      "model": "GradientBoostingRegressor",
-      "version": "v6",
-      "horizon_days": 30,
-      "features": [
-        "value",
-        "month",
-        "day_of_week",
-        "is_weekend",
-        "day_of_year",
-        "lag_1",
-        "lag_2",
-        "lag_3",
-        "lag_7",
-        "lag_14",
-        "lag_21",
-        "lag_30",
-        "roll_3_mean",
-        "roll_7_mean",
-        "roll_14_mean",
-        "roll_30_mean",
-        "roll_3_std",
-        "roll_14_std",
-        "pm25_delta_1",
-        "pm25_delta_7",
-        "temperature",
-        "humidity",
-        "wind_speed",
-        "no2_value",
-        "co_value",
-        "o3_value",
-        "so2_value",
-        "nasa_temperature",
-        "nasa_humidity",
-        "nasa_wind_speed",
-        "precipitation",
-        "wind_direction",
-        "fire_count",
-        "future_temp",
-        "future_wind",
-        "future_precip"
-      ],
-      "feature_medians": {
-        "value": 64.8425,
-        "month": 2.0,
-        "day_of_week": 3.0,
-        "is_weekend": 0.0,
-        "day_of_year": 36.0,
-        "lag_1": 64.81234615384615,
-        "lag_2": 64.77166666666666,
-        "lag_3": 64.5398,
-        "lag_7": 65.6923076923077,
-        "lag_14": 63.46714285714286,
-        "lag_21": 67.27083333333334,
-        "lag_30": 64.58146666666667,
-        "roll_3_mean": 66.97313596491227,
-        "roll_7_mean": 68.43399116380695,
-        "roll_14_mean": 69.75882561387026,
-        "roll_30_mean": 74.84810079517035,
-        "roll_3_std": 12.454409285606861,
-        "roll_14_std": 21.88765756513865,
-        "pm25_delta_1": 0.636363636363626,
-        "pm25_delta_7": -0.9531111111111166,
-        "temperature": 24.01,
-        "humidity": 58.6,
-        "wind_speed": 2.34,
-        "no2_value": 24.62,
-        "co_value": 777.9310344827586,
-        "o3_value": 23.774642857142858,
-        "so2_value": 7.944444444444445,
-        "nasa_temperature": 21.845,
-        "nasa_humidity": 58.6,
-        "nasa_wind_speed": 2.66,
-        "precipitation": 0.0,
-        "wind_direction": 140.05,
-        "fire_count": 9.0,
-        "future_temp": 24.0,
-        "future_wind": 14.8,
-        "future_precip": 0.0
-      },
-      "train_rows": 3462,
-      "test_rows": 1672,
-      "train_stations": 179,
-      "train_date_range": [
-        "2021-01-06",
-        "2026-01-29"
-      ],
-      "test_date_range": [
-        "2021-01-13",
-        "2026-05-17"
-      ],
-      "metrics": {
-        "train_r2": 0.8929,
-        "test_r2": 0.4663,
-        "test_mae": 20.92,
-        "test_rmse": 33.79,
-        "overfit_delta": 0.4266
-      },
-      "top_features": [
-        [
-          "value",
-          0.3411
-        ],
-        [
-          "future_temp",
-          0.0705
-        ],
-        [
-          "nasa_temperature",
-          0.0659
-        ],
-        [
-          "roll_7_mean",
-          0.0616
-        ],
-        [
-          "day_of_year",
-          0.0472
-        ],
-        [
-          "future_wind",
-          0.0455
-        ],
-        [
-          "lag_1",
-          0.023
-        ],
-        [
-          "no2_value",
-          0.0222
-        ],
-        [
-          "future_precip",
-          0.0216
-        ],
-        [
-          "lag_14",
-          0.0212
-        ]
-      ]
-    }
-  },
   "US": {
     "h1": {
       "country": "US",
       "model": "GradientBoostingRegressor",
-      "version": "v6",
+      "version": "v7_weather_direct",
       "horizon_days": 1,
       "features": [
         "value",
@@ -689,7 +119,7 @@
     "h7": {
       "country": "US",
       "model": "GradientBoostingRegressor",
-      "version": "v6",
+      "version": "v7_weather_direct",
       "horizon_days": 7,
       "features": [
         "value",
@@ -805,7 +235,7 @@
     "h14": {
       "country": "US",
       "model": "GradientBoostingRegressor",
-      "version": "v6",
+      "version": "v7_weather_direct",
       "horizon_days": 14,
       "features": [
         "value",
@@ -921,7 +351,7 @@
     "h30": {
       "country": "US",
       "model": "GradientBoostingRegressor",
-      "version": "v6",
+      "version": "v7_weather_direct",
       "horizon_days": 30,
       "features": [
         "value",
@@ -1039,7 +469,7 @@
     "h1": {
       "country": "GB",
       "model": "GradientBoostingRegressor",
-      "version": "v6",
+      "version": "v7_weather_direct",
       "horizon_days": 1,
       "features": [
         "value",
@@ -1159,7 +589,7 @@
     "h7": {
       "country": "GB",
       "model": "GradientBoostingRegressor",
-      "version": "v6",
+      "version": "v7_weather_direct",
       "horizon_days": 7,
       "features": [
         "value",
@@ -1279,7 +709,7 @@
     "h14": {
       "country": "GB",
       "model": "GradientBoostingRegressor",
-      "version": "v6",
+      "version": "v7_weather_direct",
       "horizon_days": 14,
       "features": [
         "value",
@@ -1397,7 +827,7 @@
     "h30": {
       "country": "GB",
       "model": "GradientBoostingRegressor",
-      "version": "v6",
+      "version": "v7_weather_direct",
       "horizon_days": 30,
       "features": [
         "value",
@@ -1515,7 +945,7 @@
     "h1": {
       "country": "AU",
       "model": "GradientBoostingRegressor",
-      "version": "v6",
+      "version": "v7_weather_direct",
       "horizon_days": 1,
       "features": [
         "value",
@@ -1631,7 +1061,7 @@
     "h7": {
       "country": "AU",
       "model": "GradientBoostingRegressor",
-      "version": "v6",
+      "version": "v7_weather_direct",
       "horizon_days": 7,
       "features": [
         "value",
@@ -1747,7 +1177,7 @@
     "h14": {
       "country": "AU",
       "model": "GradientBoostingRegressor",
-      "version": "v6",
+      "version": "v7_weather_direct",
       "horizon_days": 14,
       "features": [
         "value",
@@ -1863,7 +1293,7 @@
     "h30": {
       "country": "AU",
       "model": "GradientBoostingRegressor",
-      "version": "v6",
+      "version": "v7_weather_direct",
       "horizon_days": 30,
       "features": [
         "value",

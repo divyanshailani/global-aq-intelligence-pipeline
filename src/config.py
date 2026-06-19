@@ -10,12 +10,21 @@ are set via repository secrets.
 """
 
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file (if present)
+env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+load_dotenv(env_path, override=True)
+
+db_password = os.environ.get("POSTGRES_PASSWORD")
+if not db_password:
+    raise ValueError("POSTGRES_PASSWORD is missing. Please check your .env configuration.")
 
 # ─── Database ─────────────────────────────────────────────
 DB_CONFIG = {
     "dbname": os.environ.get("POSTGRES_DB", "indiaaq"),
     "user": os.environ.get("POSTGRES_USER", "postgres"),
-    "password": os.environ.get("POSTGRES_PASSWORD", "8765"),
+    "password": db_password,
     "host": os.environ.get("POSTGRES_HOST", "localhost"),
     "port": int(os.environ.get("POSTGRES_PORT", 5432)),
 }

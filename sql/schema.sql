@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS stations (
     longitude       DOUBLE PRECISION,
     is_active       BOOLEAN DEFAULT true,
     created_at      TIMESTAMPTZ DEFAULT now(),
-    updated_at      TIMESTAMPTZ DEFAULT now()
+    updated_at      TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (name, country_code)
 );
 
 

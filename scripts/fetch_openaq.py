@@ -24,6 +24,10 @@ import time
 import argparse
 import requests
 import psycopg2
+import asyncio
+import aiohttp
+import ssl
+import certifi
 from psycopg2.extras import execute_values
 from datetime import datetime, timedelta, timezone
 
@@ -81,7 +85,11 @@ def fetch_country_stations(country_code, headers):
             },
         )
 
-        if r.status_code != 200:
+        if r.status_code == 429:
+            print(f"  API rate limit hit. Sleeping for 10s...")
+            time.sleep(10)
+            continue
+        elif r.status_code != 200:
             print(f"  API error {r.status_code}: {r.text[:200]}")
             break
 
@@ -121,12 +129,19 @@ def upsert_stations(conn, stations):
     if not stations:
         return
 
+    # Deduplicate in python based on (name, country_code) to prevent CardinalityViolation
+    unique_stations = {}
+    for s in stations:
+        key = (s["name"], s["country_code"])
+        if key not in unique_stations:
+            unique_stations[key] = s
+    stations = list(unique_stations.values())
+
     sql = """
         INSERT INTO stations (openaq_id, name, city, state, country_code, latitude, longitude)
         VALUES %s
-        ON CONFLICT (openaq_id) DO UPDATE SET
-            name = EXCLUDED.name,
-            country_code = EXCLUDED.country_code,
+        ON CONFLICT (name, country_code) DO UPDATE SET
+            openaq_id = EXCLUDED.openaq_id,
             latitude = EXCLUDED.latitude,
             longitude = EXCLUDED.longitude,
             updated_at = now()
@@ -153,21 +168,24 @@ def get_station_id_map(conn, country_code):
         return {row[1]: row[0] for row in cur.fetchall()}
 
 
-# Step 2: Fetch measurements
-def fetch_station_sensors(station_openaq_id, headers):
-    r = requests.get(
-        f"{API_BASE}/locations/{station_openaq_id}/sensors",
-        headers=headers,
-    )
-    if r.status_code != 200:
-        return []
-    return r.json().get("results", [])
+# Step 2: Fetch measurements (ASYNC BATCHED)
+async def fetch_station_sensors_async(session, station_openaq_id, headers, semaphore):
+    url = f"{API_BASE}/locations/{station_openaq_id}/sensors"
+    for attempt in range(5):
+        async with semaphore:
+            async with session.get(url, headers=headers) as r:
+                if r.status == 429:
+                    await asyncio.sleep(5)
+                    continue
+                if r.status != 200:
+                    return []
+                data = await r.json()
+                return data.get("results", [])
+    return []
 
-
-def fetch_sensor_measurements(sensor_id, headers, date_from, date_to):
+async def fetch_sensor_measurements_async(session, sensor_id, headers, date_from, date_to, semaphore):
     all_measurements = []
     page = 1
-
     while True:
         params = {
             "limit": 1000,
@@ -175,36 +193,87 @@ def fetch_sensor_measurements(sensor_id, headers, date_from, date_to):
             "datetime_from": date_from,
             "datetime_to": date_to,
         }
-
-        r = requests.get(
-            f"{API_BASE}/sensors/{sensor_id}/measurements",
-            headers=headers,
-            params=params,
-        )
-
-        if r.status_code != 200:
+        url = f"{API_BASE}/sensors/{sensor_id}/measurements"
+        data = None
+        for attempt in range(5):
+            async with semaphore:
+                async with session.get(url, headers=headers, params=params) as r:
+                    if r.status == 429:
+                        await asyncio.sleep(5)
+                        continue
+                    if r.status != 200:
+                        break
+                    data = await r.json()
+                    break
+        else:
+            break  # failed after 5 retries
+            
+        if data is None:
             break
-
-        data = r.json()
+                
         results = data.get("results", [])
-
         if not results:
             break
-
+            
         all_measurements.extend(results)
-
+        
         raw_found = data.get("meta", {}).get("found", 0)
         try:
             found = int(str(raw_found).replace(">", "").strip())
         except (ValueError, TypeError):
             found = 9999999
+            
         if page * 1000 >= found:
             break
-
+            
         page += 1
-        time.sleep(RATE_LIMIT_SLEEP)
-
+        await asyncio.sleep(0.05)  # gentle backoff inside semaphore
+        
     return all_measurements
+
+async def process_station_async(session, station, headers, dt_from, dt_to, semaphore, internal_id_map):
+    openaq_id = station["openaq_id"]
+    internal_id = internal_id_map.get(openaq_id)
+    if not internal_id:
+        return []
+
+    sensors = await fetch_station_sensors_async(session, openaq_id, headers, semaphore)
+    if not sensors:
+        return []
+
+    tasks = []
+    for sensor in sensors:
+        sensor_id = sensor["id"]
+        tasks.append(
+            fetch_sensor_measurements_async(session, sensor_id, headers, dt_from, dt_to, semaphore)
+        )
+        
+    sensor_results = await asyncio.gather(*tasks)
+    
+    rows = []
+    for i, sensor in enumerate(sensors):
+        sensor_id = sensor["id"]
+        param = sensor["parameter"]["name"]
+        unit = sensor["parameter"]["units"]
+        measurements = sensor_results[i]
+        
+        for m in measurements:
+            try:
+                rows.append({
+                    "station_id": internal_id,
+                    "sensor_id": sensor_id,
+                    "parameter": param,
+                    "value": m["value"],
+                    "unit": unit,
+                    "datetime_utc": m["period"]["datetimeFrom"]["utc"],
+                    "datetime_local": m["period"]["datetimeFrom"].get(
+                        "local", m["period"]["datetimeFrom"]["utc"]
+                    ),
+                })
+            except (KeyError, TypeError):
+                continue
+                
+    return rows
 
 
 def insert_measurements(conn, rows):
@@ -258,22 +327,11 @@ def clear_checkpoint(country_code):
 def run_fetch(country_code, days=None, date_from=None, date_to=None, resume=False):
     """
     Main fetch function. Can be called from CLI or from orchestrator.
-
-    Args:
-        country_code: 'US', 'GB', 'CN', 'IN'
-        days: fetch last N days (None = full backfill from 2021)
-        date_from: explicit start date string 'YYYY-MM-DD' (overrides days)
-        date_to: explicit end date string 'YYYY-MM-DD' (overrides days)
-        resume: continue from checkpoint
-
-    Returns:
-        dict with stats
     """
     if country_code not in COUNTRIES:
         raise ValueError(f"Unknown country: {country_code}. Available: {list(COUNTRIES.keys())}")
 
     country_name = COUNTRIES[country_code]["name"]
-
     now = datetime.now(timezone.utc)
 
     # Priority: explicit dates > days > full backfill
@@ -288,14 +346,14 @@ def run_fetch(country_code, days=None, date_from=None, date_to=None, resume=Fals
         dt_from = f"{DATE_FROM}T00:00:00Z"
 
     print(f"\n{'='*60}")
-    print(f"  {country_name} ({country_code}) -- AQ Data Fetch")
+    print(f"  {country_name} ({country_code}) -- AQ Data Fetch (ASYNC)")
     print(f"  Date range: {dt_from[:10]} to {dt_to[:10]}")
     print(f"{'='*60}")
 
     headers = get_headers()
     conn = get_db_connection()
 
-    # Step 1: Discover stations
+    # Step 1: Discover stations (Synchronous, fast)
     print(f"\n  Discovering {country_name} stations...")
     stations = fetch_country_stations(country_code, headers)
     print(f"  Found {len(stations)} stations")
@@ -303,8 +361,8 @@ def run_fetch(country_code, days=None, date_from=None, date_to=None, resume=Fals
     upsert_stations(conn, stations)
     id_map = get_station_id_map(conn, country_code)
 
-    # Step 2: Fetch measurements
-    print(f"\n  Fetching measurements...")
+    # Step 2: Fetch measurements (Asynchronous)
+    print(f"\n  Fetching measurements (Chunked Async Batching)...")
 
     checkpoint = load_checkpoint(country_code) if resume else {
         "last_completed_openaq_id": None, "completed_count": 0
@@ -316,61 +374,51 @@ def run_fetch(country_code, days=None, date_from=None, date_to=None, resume=Fals
     total_rows = 0
     total_stations = len(stations)
 
-    for i, station in enumerate(stations):
-        openaq_id = station["openaq_id"]
-
+    # Filter stations
+    stations_to_process = []
+    for station in stations:
         if skipping:
-            if openaq_id == skip_until:
+            if station["openaq_id"] == skip_until:
                 skipping = False
             continue
+        stations_to_process.append(station)
 
-        internal_id = id_map.get(openaq_id)
-        if not internal_id:
-            continue
+    async def run_chunked_processing():
+        nonlocal total_rows, completed
+        semaphore = asyncio.Semaphore(10)
+        chunk_size = 50
+        
+        # OpenAQ returns 429 easily, so setting connector limit is helpful
+        # SSL Context for macOS certifi issue
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        connector = aiohttp.TCPConnector(limit=10, ssl=ssl_context)
+        async with aiohttp.ClientSession(connector=connector) as session:
+            for i in range(0, len(stations_to_process), chunk_size):
+                chunk = stations_to_process[i:i + chunk_size]
+                
+                print(f"\n  [{completed+1} to {completed+len(chunk)} / {total_stations}] Fetching chunk asynchronously...")
+                
+                tasks = []
+                for station in chunk:
+                    tasks.append(process_station_async(session, station, headers, dt_from, dt_to, semaphore, id_map))
+                    
+                chunk_results = await asyncio.gather(*tasks)
+                
+                chunk_rows = []
+                for rows in chunk_results:
+                    chunk_rows.extend(rows)
+                    
+                inserted = insert_measurements(conn, chunk_rows)
+                total_rows += inserted
+                completed += len(chunk)
+                
+                print(f"    Chunk complete: {inserted} rows safely bulk-inserted (Total: {total_rows})")
+                
+                last_station_id = chunk[-1]["openaq_id"]
+                save_checkpoint(country_code, last_station_id, completed)
 
-        completed += 1
-        print(f"\n  [{completed}/{total_stations}] {station['name'][:50]} (ID={openaq_id})")
-
-        sensors = fetch_station_sensors(openaq_id, headers)
-        if not sensors:
-            save_checkpoint(country_code, openaq_id, completed)
-            continue
-
-        station_rows = 0
-        for sensor in sensors:
-            sensor_id = sensor["id"]
-            param = sensor["parameter"]["name"]
-            unit = sensor["parameter"]["units"]
-
-            measurements = fetch_sensor_measurements(sensor_id, headers, dt_from, dt_to)
-
-            if not measurements:
-                continue
-
-            rows = []
-            for m in measurements:
-                try:
-                    rows.append({
-                        "station_id": internal_id,
-                        "sensor_id": sensor_id,
-                        "parameter": param,
-                        "value": m["value"],
-                        "unit": unit,
-                        "datetime_utc": m["period"]["datetimeFrom"]["utc"],
-                        "datetime_local": m["period"]["datetimeFrom"].get(
-                            "local", m["period"]["datetimeFrom"]["utc"]
-                        ),
-                    })
-                except (KeyError, TypeError):
-                    continue
-
-            inserted = insert_measurements(conn, rows)
-            station_rows += inserted
-            print(f"    {param}: {len(measurements)} fetched, {inserted} inserted")
-            time.sleep(RATE_LIMIT_SLEEP)
-
-        total_rows += station_rows
-        save_checkpoint(country_code, openaq_id, completed)
+    # Run the event loop
+    asyncio.run(run_chunked_processing())
 
     # Summary
     stats = {
@@ -392,14 +440,14 @@ def main():
     parser = argparse.ArgumentParser(description="Multi-Country AQ Data Fetcher")
     parser.add_argument("--country", type=str, required=True,
                         choices=list(COUNTRIES.keys()),
-                        help="Country code: IN, US, GB, CN")
+                        help="Country code: IN, US, GB, CN, AU")
     parser.add_argument("--days", type=int, default=None,
                         help="Fetch last N days (default: full backfill)")
     parser.add_argument("--resume", action="store_true",
                         help="Resume from checkpoint")
     args = parser.parse_args()
 
-    stats = run_fetch(args.country, args.days, args.resume)
+    stats = run_fetch(args.country, args.days, resume=args.resume)
 
     # Verify
     conn = get_db_connection()

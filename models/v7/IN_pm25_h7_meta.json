@@ -1,7 +1,7 @@
 {
   "country": "IN",
   "model": "GradientBoostingRegressor",
-  "version": "v6",
+  "version": "v7_weather_direct",
   "horizon_days": 7,
   "features": [
     "value",

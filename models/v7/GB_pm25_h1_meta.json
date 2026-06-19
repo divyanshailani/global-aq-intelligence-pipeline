@@ -1,7 +1,7 @@
 {
   "country": "GB",
   "model": "GradientBoostingRegressor",
-  "version": "v6",
+  "version": "v7_weather_direct",
   "horizon_days": 1,
   "features": [
     "value",

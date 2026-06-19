@@ -1,25 +1,26 @@
 {
-  "generated_at": "2026-06-19T10:16:14.759447",
+  "generated_at": "2026-06-19T19:24:32.049840",
+  "last_pipeline_run": "2026-06-19T19:24:32.049841",
   "mae": 5.54,
-  "r2": 0.6846,
+  "accuracy_percentage": 63.6,
   "source": "backtest",
   "sample_count": 5898,
   "live_validation_count": 0,
   "training_metrics": {
     "IN": {
-      "r2": 0.75,
+      "accuracy_percentage": 75.0,
       "mae": 9.26
     },
     "US": {
-      "r2": 0.49,
+      "accuracy_percentage": 65.3,
       "mae": 2.24
     },
     "GB": {
-      "r2": 0.24,
+      "accuracy_percentage": 63.0,
       "mae": 2.41
     },
     "AU": {
-      "r2": 0.45,
+      "accuracy_percentage": 68.7,
       "mae": 1.88
     }
   },

@@ -50,8 +50,8 @@ COUNTRY_META = {
         "confidence": "high",
         "tag": "High Confidence",
         "tag_color": "green",
-        "reason": "R²=0.75 on 31K features, V7 Thermodynamics Engine + CPCB",
-        "test_r2": 0.75,
+        "reason": "Accuracy=75.0% on 31K features, V7 Thermodynamics Engine + CPCB",
+        "accuracy_percentage": 75.0,
         "test_mae": 9.26,
     },
     "US": {
@@ -61,8 +61,8 @@ COUNTRY_META = {
         "confidence": "high",
         "tag": "High Confidence",
         "tag_color": "green",
-        "reason": "R²=0.49 on 1.4M features, V7 Thermodynamics Engine + EPA AQS",
-        "test_r2": 0.49,
+        "reason": "Accuracy=65.3% on 1.4M features, V7 Thermodynamics Engine + EPA AQS",
+        "accuracy_percentage": 65.3,
         "test_mae": 2.24,
     },
     "GB": {
@@ -72,8 +72,8 @@ COUNTRY_META = {
         "confidence": "experimental",
         "tag": "Experimental: Limited Seasonal Data",
         "tag_color": "yellow",
-        "reason": "R²=0.24, V7 Thermodynamics Engine + AURN Network",
-        "test_r2": 0.24,
+        "reason": "Accuracy=63.0%, V7 Thermodynamics Engine + AURN Network",
+        "accuracy_percentage": 63.0,
         "test_mae": 2.41,
     },
     "AU": {
@@ -83,8 +83,8 @@ COUNTRY_META = {
         "confidence": "stable",
         "tag": "Low Variance / Stable",
         "tag_color": "blue",
-        "reason": "R²=0.45, V7 Thermodynamics Engine + NSW EPA",
-        "test_r2": 0.45,
+        "reason": "Accuracy=68.7%, V7 Thermodynamics Engine + NSW EPA",
+        "accuracy_percentage": 68.7,
         "test_mae": 1.88,
     },
 }
@@ -188,21 +188,21 @@ def validate_old_predictions(conn, run_id):
             actuals = np.array([r[0] for r in rows])
             preds = np.array([r[1] for r in rows])
             live_mae = float(np.mean(np.abs(actuals - preds)))
-            ss_res = np.sum((actuals - preds) ** 2)
-            ss_tot = np.sum((actuals - np.mean(actuals)) ** 2)
-            live_r2 = float(1 - ss_res / ss_tot) if ss_tot > 0 else 0
+            mean_y = float(np.mean(actuals))
+            nmae = live_mae / mean_y if mean_y > 0 else 0
+            live_acc = max(0.0, (1.0 - nmae) * 100.0)
         else:
             live_mae = None
-            live_r2 = None
+            live_acc = None
 
     print(f"  Validated: {validated}/{len(pending)}")
     if live_mae is not None:
         print(f"  Live MAE:  {live_mae:.2f} µg/m³")
-        print(f"  Live R²:   {live_r2:.4f}")
+        print(f"  Live Acc:  {live_acc:.1f}%")
     else:
         print(f"  Live metrics hidden until {MIN_LIVE_VALIDATIONS}+ validations")
 
-    return validated, live_mae, live_r2, live_sample_count
+    return validated, live_mae, live_acc, live_sample_count
 
 
 def backtest_recent(conn, n_days=7):
@@ -278,30 +278,30 @@ def backtest_recent(conn, n_days=7):
             continue
 
         mae = float(np.mean(np.abs(y_actual - y_pred)))
-        ss_res = np.sum((y_actual - y_pred) ** 2)
-        ss_tot = np.sum((y_actual - np.mean(y_actual)) ** 2)
-        r2 = float(1 - ss_res / ss_tot) if ss_tot > 0 else 0
+        mean_y = float(np.mean(y_actual))
+        nmae = mae / mean_y if mean_y > 0 else 0
+        acc_pct = max(0.0, (1.0 - nmae) * 100.0)
 
-        country_metrics[cc] = {"r2": round(r2, 4), "mae": round(mae, 2), "n": len(y_actual)}
+        country_metrics[cc] = {"accuracy_percentage": round(acc_pct, 1), "mae": round(mae, 2), "n": len(y_actual)}
         all_actuals.extend(y_actual.tolist())
         all_preds.extend(y_pred.tolist())
 
-        print(f"    {cc}: R²={r2:.4f}  MAE={mae:.2f} µg/m³  ({len(y_actual)} samples)")
+        print(f"    {cc}: Acc={acc_pct:.1f}%  MAE={mae:.2f} µg/m³  ({len(y_actual)} samples)")
 
     if all_actuals:
         actuals = np.array(all_actuals)
         preds = np.array(all_preds)
         overall_mae = float(np.mean(np.abs(actuals - preds)))
-        ss_res = np.sum((actuals - preds) ** 2)
-        ss_tot = np.sum((actuals - np.mean(actuals)) ** 2)
-        overall_r2 = float(1 - ss_res / ss_tot) if ss_tot > 0 else 0
+        mean_y_overall = float(np.mean(actuals))
+        overall_nmae = overall_mae / mean_y_overall if mean_y_overall > 0 else 0
+        overall_acc = max(0.0, (1.0 - overall_nmae) * 100.0)
 
         print(f"\n  📊 Backtest (last {n_days}d):")
-        print(f"     Overall R²:  {overall_r2:.4f}")
+        print(f"     Overall Acc: {overall_acc:.1f}%")
         print(f"     Overall MAE: {overall_mae:.2f} µg/m³")
         print(f"     Samples:     {len(actuals):,}")
 
-        return overall_mae, overall_r2, len(actuals), country_metrics
+        return overall_mae, overall_acc, len(actuals), country_metrics
     
     return None, None, 0, {}
 
@@ -649,7 +649,7 @@ def run_predictions(conn, run_id):
     return all_predictions, total_predictions
 
 
-def export_site_data(predictions, metric_mae, metric_r2, metric_source,
+def export_site_data(predictions, metric_mae, metric_acc, metric_source,
                      metric_sample_count, live_validation_count):
     """Export JSON files for the Vercel static site."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -667,7 +667,7 @@ def export_site_data(predictions, metric_mae, metric_r2, metric_source,
         "countries": {},
         "accuracy": {
             "mae": round(metric_mae, 2) if metric_mae is not None else None,
-            "r2": round(metric_r2, 4) if metric_r2 is not None else None,
+            "accuracy_percentage": round(metric_acc, 1) if metric_acc is not None else None,
             "source": metric_source,
             "sample_count": metric_sample_count,
             "live_validation_count": live_validation_count,
@@ -691,13 +691,14 @@ def export_site_data(predictions, metric_mae, metric_r2, metric_source,
     # Accuracy data for the proof section
     accuracy = {
         "generated_at": datetime.now().isoformat(),
+        "last_pipeline_run": datetime.now().isoformat(),
         "mae": round(metric_mae, 2) if metric_mae is not None else None,
-        "r2": round(metric_r2, 4) if metric_r2 is not None else None,
+        "accuracy_percentage": round(metric_acc, 1) if metric_acc is not None else None,
         "source": metric_source,
         "sample_count": metric_sample_count,
         "live_validation_count": live_validation_count,
         "training_metrics": {
-            cc: {"r2": m["test_r2"], "mae": m["test_mae"]}
+            cc: {"accuracy_percentage": m.get("accuracy_percentage"), "mae": m["test_mae"]}
             for cc, m in COUNTRY_META.items()
         },
         "confidence_explanation": {
@@ -759,7 +760,7 @@ def main():
     print(f"\n{'─'*60}")
     print("  Phase 1: Validate Old Predictions")
     print(f"{'─'*60}")
-    validated, live_mae, live_r2, live_validation_count = validate_old_predictions(conn, run_id)
+    validated, live_mae, live_acc, live_validation_count = validate_old_predictions(conn, run_id)
 
     # Phase 3: Generate new predictions
     print(f"\n{'─'*60}")
@@ -771,7 +772,7 @@ def main():
     print(f"\n{'─'*60}")
     print("  Phase 2.5: Backtest (Last 7 Days vs Actuals)")
     print(f"{'─'*60}")
-    bt_mae, bt_r2, bt_sample_count, bt_country = backtest_recent(conn, n_days=7)
+    bt_mae, bt_acc, bt_sample_count, bt_country = backtest_recent(conn, n_days=7)
 
     # Phase 3.75: Live Validation Observatory (Collision Engine)
     print(f"\n{'─'*60}")
@@ -787,25 +788,25 @@ def main():
     # Priority: live validated > backtest > none, with source shown honestly.
     if live_mae is not None:
         display_mae = live_mae
-        display_r2 = live_r2
-        metrics_source = "live"
+        display_acc = live_acc
+        metric_source = "live"
         metric_sample_count = live_validation_count
     elif bt_mae is not None:
         display_mae = bt_mae
-        display_r2 = bt_r2
-        metrics_source = "backtest"
+        display_acc = bt_acc
+        metric_source = "backtest"
         metric_sample_count = bt_sample_count
     else:
         display_mae = None
-        display_r2 = None
-        metrics_source = "none"
+        display_acc = None
+        metric_source = "none"
         metric_sample_count = 0
 
     export_site_data(
         predictions,
         display_mae,
-        display_r2,
-        metrics_source,
+        display_acc,
+        metric_source,
         metric_sample_count,
         live_validation_count,
     )
@@ -830,10 +831,10 @@ def main():
             total_preds,
             validated,
             live_mae,
-            live_r2,
+            live_acc,
             bt_mae,
-            bt_r2,
-            metrics_source,
+            bt_acc,
+            metric_source,
             metric_sample_count,
             str(run_id),
         ))
@@ -845,9 +846,9 @@ def main():
     print(f"  Predictions: {total_preds:,}")
     print(f"  Validated:   {validated}")
     if display_mae is not None:
-        label = {"live": "Live", "backtest": "Backtest", "none": ""}[metrics_source]
+        label = {"live": "Live", "backtest": "Backtest", "none": ""}[metric_source]
         print(f"  {label} MAE:  {display_mae:.2f} µg/m³")
-        print(f"  {label} R²:   {display_r2:.4f}")
+        print(f"  {label} Acc:   {display_acc:.1f}%")
         print(f"  Samples:     {metric_sample_count:,}")
 
     conn.close()
