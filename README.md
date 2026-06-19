@@ -1,5 +1,6 @@
 # Global AQ Intelligence — ML Pipeline
 
+![Forecast Horizons EDA](./plots/forecast_horizons.png)
 > End-to-end PM2.5 forecasting engine for 4 countries. Autonomous daily pipeline: fetch → engineer → predict → export → sync.
 
 **Stack:** Python · PostgreSQL · scikit-learn GBR · NASA POWER · Open-Meteo · FastAPI
