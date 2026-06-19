@@ -1,12 +1,13 @@
 """
 Global AQ Intelligence — Prediction Pipeline
 ==============================================
-One-click pipeline: fetch → validate → predict → export JSON.
+One-click pipeline: fetch → validate → predict → export JSON → sync frontend.
 
-Horizons:
-  - 7-day:  Direct model prediction (high confidence)
-  - 15-day: Chained predictions with widening confidence bands
-  - 30-day: Chained predictions with "decreasing accuracy" warning
+Architecture: V7 Direct Horizon Models + Weather-Weighted Interpolation
+  - Anchor points (h1, h7, h14, h30) are direct GBR model outputs
+  - All intermediate days are weather-weighted interpolations between anchors
+  - Thermodynamic modifiers: rain washout, wind dispersion, stagnation spike
+  - Future weather (Open-Meteo 16-day) injected per-station, per-date
 
 Usage:
     python scripts/predict_pipeline.py              # full run
