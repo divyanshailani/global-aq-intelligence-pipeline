@@ -19,6 +19,7 @@ uvicorn[standard]>=0.20
 
 # HTTP / data fetching
 requests>=2.28
+aiohttp>=3.9
 
 # Utilities (optional, used in notebooks)
 matplotlib>=3.7

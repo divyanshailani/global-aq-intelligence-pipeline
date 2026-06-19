@@ -85,3 +85,61 @@ The 7-Day Operational Backtest evaluated via `backtest_recent()` yielded `R²=0.
 
 **Solution:**
 We identified that `backtest_recent()` inherently tests a highly volatile micro-sample (the last 7 days of live production actuals). A 7-day window is prone to extreme variance from localized, seasonal anomalies. The 20% temporal holdout run by `train_v7_experiment.py` evaluates the model across months of data, providing the statistically robust `0.75` R² metric displayed on the site. Operational metrics are now correctly separated from global benchmark validation.
+
+---
+
+## 9. Synchronous ETL Bottleneck — API Rate Limits Causing Pipeline Stalls [RESOLVED 2026-06-19]
+**Issue:**
+The original `fetch_openaq.py` made sequential blocking `requests.get()` calls per station. With 1,400+ US stations, this created multi-hour fetch windows and regularly hit the OpenAQ API's rate limit (HTTP 429). When 429s hit, the pipeline stalled silently.
+
+**Solution:**
+Rewrote the measurement fetch layer as a fully async pipeline using `aiohttp` + `asyncio.Semaphore` for chunked concurrent batching. Key changes:
+- `fetch_station_sensors()` replaced with `fetch_station_sensors_async(session, id, headers, semaphore)`
+- 429 responses now trigger `await asyncio.sleep(5)` and retry up to 5 times before giving up on a station
+- Rate limit hit on the stations endpoint triggers a synchronous `time.sleep(10)` before retrying
+- `certifi` + `ssl` context injected to prevent SSL verification failures on macOS
+- `aiohttp` added to `requirements.txt`
+
+---
+
+## 10. Database Fresh-Clone Failure — Hardcoded Password + Missing UNIQUE Constraint [RESOLVED 2026-06-19]
+**Issue 1:** `src/config.py` had a hardcoded fallback DB password (`"8765"`). Any fresh clone by a reviewer or CI environment that had no `.env` file would silently use the wrong password and fail on connection with a cryptic auth error.
+
+**Issue 2:** `stations` table had no `UNIQUE` constraint on `(name, country_code)`. During re-ingestion runs, `upsert_stations()` produced `CardinalityViolation` errors when the same station appeared multiple times in an API response page.
+
+**Solution:**
+- `src/config.py`: removed hardcoded fallback. `POSTGRES_PASSWORD` is now loaded via `python-dotenv` and raises a hard `ValueError` at startup if missing. Fails fast and loudly.
+- `sql/schema.sql`: added `UNIQUE (name, country_code)` to the `stations` table definition. `ON CONFLICT` clause in `upsert_stations()` now targets `(name, country_code)` instead of `openaq_id`.
+- `fetch_openaq.py`: added Python-level deduplication of station list on `(name, country_code)` key before any DB write.
+
+---
+
+## 11. R² Low-Variance Illusion — Metric Misleads on Clean-Air Countries [RESOLVED 2026-06-19]
+**Issue:**
+R² (coefficient of determination) is pathologically misleading for low-variance targets. Australia and UK have PM2.5 ranges of 1–8 µg/m³. A model that predicts the mean every time achieves R²=0.0. A model that adds small noise achieves negative R². This caused Australia (R²=0.45) and UK (R²=0.24) to look broken on the frontend and in internal logs, even though their absolute MAE was well within useful accuracy (1.88 and 2.41 µg/m³ respectively).
+
+**Solution:**
+Replaced R² throughout the pipeline with **NMAE-derived Accuracy %**:
+
+```
+NMAE = MAE / mean(y_actual)
+Accuracy % = max(0, (1 - NMAE) * 100)
+```
+
+This is scale-invariant and interpretable to non-ML audiences. Changes applied across:
+- `validate_old_predictions()` — live metric now reports `live_acc` not `live_r2`
+- `backtest_recent()` — backtest metric now `acc_pct` not `r2`
+- `export_site_data()` — `accuracy.json` and `model_meta.json` emit `accuracy_percentage` field, `r2` field removed
+- `COUNTRY_META` dict — `test_r2` replaced with `accuracy_percentage` per country
+- Frontend `CountryCard.tsx` — dynamic Tailwind color coding: green ≥80%, amber ≥60%, rose <60%
+- Frontend `AccuracyProof.tsx` — bar chart and tooltip updated to render Accuracy % not R²
+- Frontend `types/index.ts` — `test_r2` field removed, `accuracy_percentage` added
+
+---
+
+## 12. Stale Docstring — predict_pipeline.py V5 Architecture Description [RESOLVED 2026-06-19]
+**Issue:**
+The module-level docstring in `predict_pipeline.py` described the v5 chaining architecture (7-day direct / 15-day chained / 30-day chained). After the V7 migration, this was actively misleading to anyone reading the source.
+
+**Solution:**
+Docstring updated to describe V7 Direct Thermodynamics Engine: anchor points h1/h7/h14/h30 as direct GBR outputs, weather-weighted interpolation for intermediate days, and Open-Meteo 16-day future weather injection per station per date.
