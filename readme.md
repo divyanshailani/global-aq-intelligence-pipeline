@@ -55,6 +55,12 @@ What started as a simple local EDA project evolved into a robust, global MLOps a
 | 🇦🇺 Australia | 0.64 | 1.6 µg/m³ | Clean air, low variance |
 | 🇬🇧 UK | 0.48 | 2.0 µg/m³ | Fragmented local sensors |
 
+### Honest ML Quirks & Future Work
+While the pipeline is production-ready, there are a few ML quirks we are actively tracking:
+- **Physics-Backed Persistence at h1:** For India (and others), `value` (today's PM2.5) holds ~82% feature importance for the 1-day forecast. The `h1` model essentially says "tomorrow ≈ today, adjusted for season and weather." This is a reasonable, physics-backed baseline. For `h7` and `h30`, features like `roll_3_mean` and `day_of_year` correctly take over the signal.
+- **US Medium-Range Weakness:** The US `h7` and `h14` R² scores are weak. A single country-level GBR model for 1,400 US stations across wildly different geographies (coast, desert, industrial midwest) is too coarse. The seasonality signal (`day_of_year`) carries the `h30` model. **Future fix:** Train regional sub-models or per-station models for the US.
+- **Overfit on IN h30:** The India 30-day model shows a high train R² (0.88) vs test R² (0.43). It memorizes winter pollution spikes but struggles to generalize them. **Future fix:** Increase regularization (`min_samples_leaf` up to 20-25, `max_depth` down to 4) or gather more seasonal training data.
+
 ### How to Run Locally
 
 1. **Database Setup:**
