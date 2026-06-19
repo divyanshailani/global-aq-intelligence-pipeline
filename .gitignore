@@ -3,6 +3,7 @@ data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+*.db
 
 # Large data CSVs (regenerable via scripts)
 data/weather_nasa_power.csv

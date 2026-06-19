@@ -1,3 +1,7 @@
+> ⚠️ **PROPRIETARY & CONFIDENTIAL**
+> This repository contains the architectural implementation of the Global AQ Intelligence pipeline.
+> The core V7 thermodynamic weights (`.pkl`), proprietary datasets, and historical telemetry databases are excluded to protect intellectual property.
+
 # Global AQ Intelligence — ML Pipeline
 
 ![Dashboard Screenshot](https://raw.githubusercontent.com/divyanshailani/global-aq-intelligence-web/main/public/images/ui_dashboard.png)
@@ -176,3 +180,9 @@ Output JSONs are written to `data/site_data/` and automatically synced to `../gl
 ---
 
 For the full engineering history — data leakage discoveries, NASA POWER migration, thermodynamic interpolation design — see [`ISSUES.md`](./ISSUES.md).
+
+---
+
+### License & Copyright
+© 2026 Divyansh Ailani. All Rights Reserved.
+This code is provided strictly for **portfolio viewing and evaluation purposes**. You may not copy, modify, distribute, or run this pipeline without explicit permission.
