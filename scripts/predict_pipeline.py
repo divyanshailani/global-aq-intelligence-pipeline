@@ -35,6 +35,7 @@ from src.config import DB_CONFIG, MODEL_DIR as _MODEL_DIR, SITE_DATA_DIR
 
 MODEL_DIR = _MODEL_DIR
 V7_MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models", "v7")  # Production
+V8_MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models", "v8")  # Experimental
 OUTPUT_DIR = SITE_DATA_DIR
 
 COUNTRIES = ["IN", "US", "GB", "AU"]
@@ -426,8 +427,15 @@ def predict_direct_v7(country_code, last_row, station_forecast):
         climatology_baseline[feat] = np.mean(valid_vals) if valid_vals else 0
         
     for h in [1, 7, 14, 30]:
-        model_path = os.path.join(V7_MODEL_DIR, f"{country_code}_pm25_h{h}_gbr.pkl")
-        meta_path  = os.path.join(V7_MODEL_DIR, f"{country_code}_pm25_h{h}_meta.json")
+        model_path = os.path.join(V8_MODEL_DIR, f"{country_code}_pm25_h{h}_gbr.pkl")
+        meta_path  = os.path.join(V8_MODEL_DIR, f"{country_code}_pm25_h{h}_meta.json")
+        
+        # Fallback to V7 if V8 is missing
+        if not os.path.exists(model_path):
+            model_path = os.path.join(V7_MODEL_DIR, f"{country_code}_pm25_h{h}_gbr.pkl")
+            meta_path  = os.path.join(V7_MODEL_DIR, f"{country_code}_pm25_h{h}_meta.json")
+            
+
         if not os.path.exists(model_path):
             continue
         model = joblib.load(model_path)
@@ -455,6 +463,12 @@ def predict_direct_v7(country_code, last_row, station_forecast):
                     row[col] = station_forecast[target_date_h_str].get("precip", 0)
                 else:
                     row[col] = climatology_baseline["precip"]
+            elif col == f"pm25_lag_{h}":
+                row[col] = last_row.get("value", 0)
+            elif col == "pm25_rolling_mean_3d":
+                row[col] = last_row.get("roll_3_mean", 0)
+            elif col == "pm25_rolling_std_3d":
+                row[col] = last_row.get("roll_3_std", 0)
             else:
                 val = last_row.get(col)
                 row[col] = val if val is not None else medians.get(col, 0)

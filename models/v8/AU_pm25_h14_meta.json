@@ -1,0 +1,35 @@
+{
+  "country": "AU",
+  "model": "GradientBoostingRegressor",
+  "version": "v8_horizon_aligned",
+  "horizon_days": 14,
+  "features": [
+    "pm25_lag_14",
+    "pm25_rolling_mean_3d",
+    "pm25_rolling_std_3d",
+    "month",
+    "day_of_year",
+    "day_of_week",
+    "future_temp",
+    "future_wind",
+    "future_precip"
+  ],
+  "feature_medians": {
+    "pm25_lag_14": 5.133625,
+    "pm25_rolling_mean_3d": 5.2793473333333365,
+    "pm25_rolling_std_3d": 1.449553185488691,
+    "month": 6.0,
+    "day_of_year": 180.0,
+    "day_of_week": 3.0,
+    "future_temp": 16.6,
+    "future_wind": 17.8,
+    "future_precip": 0.2
+  },
+  "metrics": {
+    "test_r2": 0.2632,
+    "test_mae": 2.18,
+    "test_rmse": 3.18,
+    "nmae": 0.3609,
+    "mase": 0.68
+  }
+}
