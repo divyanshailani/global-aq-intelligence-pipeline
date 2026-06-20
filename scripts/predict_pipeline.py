@@ -20,6 +20,7 @@ import os
 import sys
 import time
 import requests
+import glob
 import uuid
 from datetime import datetime, timedelta, date
 from live_validation import run_live_validation
@@ -39,6 +40,7 @@ from src.config import DB_CONFIG, MODEL_DIR as _MODEL_DIR, SITE_DATA_DIR
 MODEL_DIR = _MODEL_DIR
 V7_MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models", "v7")  # Production
 V9_MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models", "v9")  # XGBoost Production
+V9_4_MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models", "v9_4")  # XGBoost V9.4
 OUTPUT_DIR = SITE_DATA_DIR
 
 COUNTRIES = ["IN", "US", "GB", "AU"]
@@ -364,6 +366,47 @@ def get_recent_features(conn, country_code, n_days=RECENT_CONTEXT_DAYS,
 
 
 
+def haversine_dist(lat1, lon1, lat2, lon2):
+    R = 6371.0
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+    dLat = lat2 - lat1
+    dLon = lon2 - lon1
+    a = np.sin(dLat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dLon/2)**2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    return R * c
+
+def load_latest_viirs_data(country_code):
+    try:
+        csv_files = glob.glob(os.path.join(os.path.dirname(__file__), "..", "data", "raw", "DL_FIRE_SV-C2_*", "fire_*.csv"))
+        viirs_list = []
+        bounds = {
+            "IN": (6, 38, 68, 98),
+            "US": (24, 50, -125, -66),
+            "GB": (49, 61, -9, 2),
+            "AU": (-44, -10, 112, 154)
+        }
+        min_lat, max_lat, min_lon, max_lon = bounds.get(country_code, (-90, 90, -180, 180))
+        
+        for f in csv_files:
+            v = pd.read_csv(f, usecols=["latitude", "longitude", "brightness", "acq_date"])
+            v = v[(v["latitude"] >= min_lat) & (v["latitude"] <= max_lat) & 
+                  (v["longitude"] >= min_lon) & (v["longitude"] <= max_lon)]
+            v = v.rename(columns={"latitude": "fire_lat", "longitude": "fire_lon"})
+            viirs_list.append(v)
+            
+        if viirs_list:
+            viirs = pd.concat(viirs_list, ignore_index=True)
+            viirs["acq_date"] = pd.to_datetime(viirs["acq_date"])
+            if not viirs.empty:
+                latest_date = viirs["acq_date"].max()
+                viirs = viirs[viirs["acq_date"] == latest_date]
+            return viirs
+        else:
+            return pd.DataFrame(columns=["fire_lat", "fire_lon", "brightness", "acq_date"])
+    except Exception as e:
+        print(f"Warning: Could not load viirs_data. Error: {e}")
+        return pd.DataFrame(columns=["fire_lat", "fire_lon", "brightness", "acq_date"])
+
 def fetch_station_forecasts(stations_df):
     """
     Fetch 16-day Open-Meteo forecasts for a list of stations.
@@ -414,14 +457,14 @@ def fetch_station_forecasts(stations_df):
 
 
 
-def predict_direct_v9(country_code, last_row, station_forecast):
+def predict_direct_ensemble(country_code, station_df, station_forecast, viirs_data):
     """
-    30-day forecast using direct horizon models (v7).
-    Days 1/7/14/30 are direct model outputs.
-    Intermediate days are linearly interpolated between bracketing anchors.
-    Uses Open-Meteo future weather for the specific horizon.
+    Dynamic Geospatial Ensemble Router
+    - GB @ h14, 30: Uses V9 Engine
+    - Otherwise: Uses V9.4 Engine (Delta + VIIRS)
     """
     direct = {}
+    last_row = station_df.iloc[-1].to_dict()
     last_date = pd.to_datetime(last_row.get("date", date.today()))
     
     # Calculate climatology baseline for h=30
@@ -431,8 +474,11 @@ def predict_direct_v9(country_code, last_row, station_forecast):
         climatology_baseline[feat] = np.mean(valid_vals) if valid_vals else 0
         
     for h in [1, 7, 14, 30]:
-        model_path = os.path.join(V9_MODEL_DIR, f"{country_code}_pm25_h{h}_xgb.json")
-        meta_path  = os.path.join(V9_MODEL_DIR, f"{country_code}_pm25_h{h}_meta.json")
+        use_v9 = (country_code == 'GB' and h in [14, 30])
+        model_base_dir = V9_MODEL_DIR if use_v9 else V9_4_MODEL_DIR
+        
+        model_path = os.path.join(model_base_dir, f"{country_code}_pm25_h{h}_xgb.json")
+        meta_path  = os.path.join(model_base_dir, f"{country_code}_pm25_h{h}_meta.json")
         
         if not os.path.exists(model_path):
             continue
@@ -445,33 +491,116 @@ def predict_direct_v9(country_code, last_row, station_forecast):
         medians   = meta.get("feature_medians", {})
 
         row = {}
-        target_date_h_str = (last_date + timedelta(days=h)).strftime('%Y-%m-%d')
+        target_date = last_date + timedelta(days=h)
+        target_date_h_str = target_date.strftime('%Y-%m-%d')
         
-        for col in feat_cols:
-            if col == "future_temp":
-                if h <= 15 and target_date_h_str in station_forecast:
-                    row[col] = station_forecast[target_date_h_str].get("temp", 0)
+        if use_v9:
+            for col in feat_cols:
+                if col == "future_temp":
+                    if h <= 15 and target_date_h_str in station_forecast:
+                        row[col] = station_forecast[target_date_h_str].get("temp", 0)
+                    else:
+                        row[col] = climatology_baseline["temp"]
+                elif col == "future_wind":
+                    if h <= 15 and target_date_h_str in station_forecast:
+                        row[col] = station_forecast[target_date_h_str].get("wind", 0)
+                    else:
+                        row[col] = climatology_baseline["wind"]
+                elif col == "future_precip":
+                    if h <= 15 and target_date_h_str in station_forecast:
+                        row[col] = station_forecast[target_date_h_str].get("precip", 0)
+                    else:
+                        row[col] = climatology_baseline["precip"]
+                elif col == f"pm25_lag_{h}":
+                    row[col] = last_row.get("value", 0)
+                elif col == "pm25_rolling_mean_3d":
+                    row[col] = last_row.get("roll_3_mean", 0)
+                elif col == "pm25_rolling_std_3d":
+                    row[col] = last_row.get("roll_3_std", 0)
                 else:
-                    row[col] = climatology_baseline["temp"]
-            elif col == "future_wind":
-                if h <= 15 and target_date_h_str in station_forecast:
-                    row[col] = station_forecast[target_date_h_str].get("wind", 0)
+                    val = last_row.get(col)
+                    row[col] = val if val is not None else medians.get(col, 0)
+        else:
+            for col in feat_cols:
+                if col == f"pm25_lag_{h}":
+                    row[col] = last_row.get("value", 0)
+                elif col == "pm25_ema_3d":
+                    row[col] = station_df["value"].ewm(span=3, adjust=False).mean().iloc[-1]
+                elif col == "month_sin":
+                    row[col] = np.sin(2 * np.pi * target_date.month / 12)
+                elif col == "month_cos":
+                    row[col] = np.cos(2 * np.pi * target_date.month / 12)
+                elif col == "day_of_year_sin":
+                    doy = target_date.timetuple().tm_yday
+                    row[col] = np.sin(2 * np.pi * doy / 365.25)
+                elif col == "day_of_year_cos":
+                    doy = target_date.timetuple().tm_yday
+                    row[col] = np.cos(2 * np.pi * doy / 365.25)
+                elif col == "future_temp":
+                    if h <= 15 and target_date_h_str in station_forecast:
+                        row[col] = station_forecast[target_date_h_str].get("temp", 0)
+                    else:
+                        row[col] = climatology_baseline["temp"]
+                elif col == "future_wind":
+                    if h <= 15 and target_date_h_str in station_forecast:
+                        row[col] = station_forecast[target_date_h_str].get("wind", 0)
+                    else:
+                        row[col] = climatology_baseline["wind"]
+                elif col == "future_precip":
+                    if h <= 15 and target_date_h_str in station_forecast:
+                        row[col] = station_forecast[target_date_h_str].get("precip", 0)
+                    else:
+                        row[col] = climatology_baseline["precip"]
+                elif col == "pm25_momentum":
+                    row[col] = last_row.get("value", 0) - last_row.get("lag_1", 0)
+                elif col == "future_temp_momentum":
+                    temp_h = station_forecast.get(target_date_h_str, {}).get("temp", 0) if h <= 15 else climatology_baseline.get("temp", 0)
+                    if h == 1:
+                        temp_prev = last_row.get("om_temperature", last_row.get("temperature", 0))
+                    else:
+                        target_prev_str = (target_date - timedelta(days=1)).strftime('%Y-%m-%d')
+                        temp_prev = station_forecast.get(target_prev_str, {}).get("temp", 0)
+                    row[col] = temp_h - temp_prev
+                elif col == "future_wind_momentum":
+                    wind_h = station_forecast.get(target_date_h_str, {}).get("wind", 0) if h <= 15 else climatology_baseline.get("wind", 0)
+                    if h == 1:
+                        wind_prev = last_row.get("om_wind_speed", last_row.get("wind_speed", 0))
+                    else:
+                        target_prev_str = (target_date - timedelta(days=1)).strftime('%Y-%m-%d')
+                        wind_prev = station_forecast.get(target_prev_str, {}).get("wind", 0)
+                    row[col] = wind_h - wind_prev
+                elif col == "fire_density_100km":
+                    row[col] = 0.0
+                    if not viirs_data.empty:
+                        dists = haversine_dist(last_row.get("latitude", 0), last_row.get("longitude", 0), viirs_data["fire_lat"].values, viirs_data["fire_lon"].values)
+                        mask = dists <= 100.0
+                        if np.any(mask):
+                            row[col] = float(np.sum(mask))
+                elif col == "fire_radiative_power_total":
+                    row[col] = 0.0
+                    if not viirs_data.empty:
+                        dists = haversine_dist(last_row.get("latitude", 0), last_row.get("longitude", 0), viirs_data["fire_lat"].values, viirs_data["fire_lon"].values)
+                        mask = dists <= 100.0
+                        if np.any(mask):
+                            row[col] = float(np.sum(viirs_data["brightness"].values[mask]))
+                elif col == "fire_wind_interaction":
+                    frp = 0.0
+                    if not viirs_data.empty:
+                        dists = haversine_dist(last_row.get("latitude", 0), last_row.get("longitude", 0), viirs_data["fire_lat"].values, viirs_data["fire_lon"].values)
+                        mask = dists <= 100.0
+                        if np.any(mask):
+                            frp = float(np.sum(viirs_data["brightness"].values[mask]))
+                    wind_h = station_forecast.get(target_date_h_str, {}).get("wind", 0) if h <= 15 else climatology_baseline.get("wind", 0)
+                    row[col] = frp * wind_h
+                elif col == "wind_u":
+                    wd = last_row.get("wind_direction")
+                    row[col] = np.cos(wd * np.pi / 180) if pd.notnull(wd) else medians.get(col, 0)
+                elif col == "wind_v":
+                    wd = last_row.get("wind_direction")
+                    row[col] = np.sin(wd * np.pi / 180) if pd.notnull(wd) else medians.get(col, 0)
                 else:
-                    row[col] = climatology_baseline["wind"]
-            elif col == "future_precip":
-                if h <= 15 and target_date_h_str in station_forecast:
-                    row[col] = station_forecast[target_date_h_str].get("precip", 0)
-                else:
-                    row[col] = climatology_baseline["precip"]
-            elif col == f"pm25_lag_{h}":
-                row[col] = last_row.get("value", 0)
-            elif col == "pm25_rolling_mean_3d":
-                row[col] = last_row.get("roll_3_mean", 0)
-            elif col == "pm25_rolling_std_3d":
-                row[col] = last_row.get("roll_3_std", 0)
-            else:
-                val = last_row.get(col)
-                row[col] = val if val is not None else medians.get(col, 0)
+                    val = last_row.get(col)
+                    row[col] = val if val is not None else medians.get(col, 0)
 
         X = pd.DataFrame([row])[feat_cols]
         X = X.apply(pd.to_numeric, errors="coerce")
@@ -481,6 +610,10 @@ def predict_direct_v9(country_code, last_row, station_forecast):
         X = X.replace([np.inf, -np.inf], 0)
 
         pred = float(model.predict(X)[0])
+        
+        if not use_v9:
+            pred = pred + last_row.get("value", 0)
+            
         direct[h] = max(0.0, pred)
 
     if not direct:
@@ -564,6 +697,8 @@ def run_predictions(conn, run_id):
         if df.empty:
             print(f"    No active stations for {cc} in the last {ACTIVE_STATION_MAX_AGE_DAYS} days")
             continue
+            
+        viirs = load_latest_viirs_data(cc)
 
         # Prefer fresh stations first, then stations with enough context rows.
         station_stats = (
@@ -601,7 +736,7 @@ def run_predictions(conn, run_id):
                 continue
 
             station_forecast = forecasts.get(sid, {})
-            preds = predict_direct_v9(cc, last_row, station_forecast)
+            preds = predict_direct_ensemble(cc, station_df, station_forecast, viirs)
             if not preds:
                 continue
             
@@ -787,9 +922,9 @@ def main():
         """, (str(run_id),))
     conn.commit()
 
-    # Dynamically update COUNTRY_META from V9 models
+    # Dynamically update COUNTRY_META from V9.4 models
     for cc in COUNTRIES:
-        meta_path = os.path.join(V9_MODEL_DIR, f"{cc}_pm25_h1_meta.json")
+        meta_path = os.path.join(V9_4_MODEL_DIR, f"{cc}_pm25_h1_meta.json")
         if os.path.exists(meta_path):
             with open(meta_path, "r") as f:
                 meta = json.load(f)
@@ -798,7 +933,7 @@ def main():
             mae = metrics.get("test_mae", 0)
             COUNTRY_META[cc]["accuracy_percentage"] = acc
             COUNTRY_META[cc]["test_mae"] = mae
-            COUNTRY_META[cc]["reason"] = f"Accuracy={acc:.1f}%, V9 XGBoost Engine"
+            COUNTRY_META[cc]["reason"] = f"Accuracy={acc:.1f}%, V9.4 Geospatial Ensemble"
 
     # Phase 1: Check last run
     last_run = get_last_run_date(conn)
