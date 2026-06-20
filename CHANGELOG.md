@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [9.4.0] - V9.4 Geospatial Ensemble Router
+
+### 🚀 Recent Updates (V9.4)
+- **Dynamic Geospatial Ensemble Router**: Implemented a sophisticated routing architecture that dynamically dispatches prediction requests. Great Britain uses V9 for long horizons ($h=14, 30$), while all other regions and short horizons use the V9.4 engine.
+- **Delta Target Transformation**: Pivoted the target prediction to 'Velocity' ($\Delta Y = Y_t - Y_{t-1}$) to force the model to explicitly correct the naive baseline, unlocking significant long-term stability for US and AU nodes.
+- **SUOMI VIIRS Spatial 'Blast Radius' Engine**: Bridged the spatial gap between satellite fire coordinates and ground-based AQI stations. The engine queries NASA FIRMS (VIIRS) to compute a 100km `fire_density` and `fire_radiative_power` dynamically.
+- **Fading Memory (EMA)**: Upgraded from a simple 3-day rolling mean to an Exponential Moving Average (EMA) to give higher weight to recent micro-fluctuations, crushing the 1-day horizon underfitting problem (India $h=1$ MASE dropped from 0.96 to 0.90).
+
+
 ## [8.0.0] - V8 Direct-Horizon Engine (Deprecated)
 
 ### 🚀 Recent Updates (Transition to V8)
