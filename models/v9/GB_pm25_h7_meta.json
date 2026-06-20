@@ -30,6 +30,7 @@
     "test_mae": 2.59,
     "test_rmse": 12.35,
     "nmae": 0.4063,
-    "mase": 0.64
+    "mase": 0.64,
+    "accuracy_percentage": 59.37
   }
 }
