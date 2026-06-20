@@ -1,0 +1,35 @@
+{
+  "country": "IN",
+  "model": "XGBRegressor",
+  "version": "v9_xgboost_global",
+  "horizon_days": 14,
+  "features": [
+    "pm25_lag_14",
+    "pm25_rolling_mean_3d",
+    "pm25_rolling_std_3d",
+    "month",
+    "day_of_year",
+    "day_of_week",
+    "future_temp",
+    "future_wind",
+    "future_precip"
+  ],
+  "feature_medians": {
+    "pm25_lag_14": 51.635000000000005,
+    "pm25_rolling_mean_3d": 53.16763285024157,
+    "pm25_rolling_std_3d": 10.93868829470072,
+    "month": 3.0,
+    "day_of_year": 85.0,
+    "day_of_week": 3.0,
+    "future_temp": 25.6,
+    "future_wind": 15.1,
+    "future_precip": 0.0
+  },
+  "metrics": {
+    "test_r2": 0.1874,
+    "test_mae": 17.19,
+    "test_rmse": 28.95,
+    "nmae": 0.4462,
+    "mase": 0.61
+  }
+}

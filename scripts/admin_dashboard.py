@@ -512,7 +512,7 @@ def _run_retrain():
                 add_log(line.strip())
 
         if result.returncode == 0:
-            add_log("✅ RETRAIN COMPLETE — new models saved to models/v8/")
+            add_log("✅ RETRAIN COMPLETE — new models saved to models/v9/")
             pipeline_state["result"] = "success"
         else:
             add_log(f"❌ Train error: {result.stderr[:500]}")
@@ -835,11 +835,11 @@ ADMIN_HTML = """<!DOCTYPE html>
             </table>
         </div>
 
-        <!-- V8 Live Validation -->
+        <!-- V9 Live Validation -->
         <div class="card">
-            <div class="card-title" style="color: #4fb8b0;">⚡ V8 Live Validation (Real-World Accuracy)</div>
+            <div class="card-title" style="color: #4fb8b0;">⚡ V9 XGBoost Live Validation (Real-World Accuracy)</div>
             <div class="card-subtitle">
-                Tracking the daily live MAE error between V8 Horizon-Aligned predictions and actual PM2.5 readings.
+                Tracking the daily live MAE error between V9 XGBoost predictions and actual PM2.5 readings.
             </div>
             <table class="table">
                 <thead>

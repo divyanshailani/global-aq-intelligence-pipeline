@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-20T07:45:12.516428",
+  "generated_at": "2026-06-20T15:11:37.581154",
   "model_version": "v7_weather_direct",
   "countries": {
     "IN": {
@@ -12,7 +12,6 @@
       "reason": "Accuracy=75.0% on 31K features, V7 Thermodynamics Engine + CPCB",
       "accuracy_percentage": 75.0,
       "test_mae": 9.26,
-      "mase": 1.51,
       "station_count": 51,
       "last_data_date": "2026-06-17",
       "forecast_days": 30
@@ -27,7 +26,6 @@
       "reason": "Accuracy=65.3% on 1.4M features, V7 Thermodynamics Engine + EPA AQS",
       "accuracy_percentage": 65.3,
       "test_mae": 2.24,
-      "mase": 0.49,
       "station_count": 51,
       "last_data_date": "2026-06-16",
       "forecast_days": 30
@@ -42,7 +40,6 @@
       "reason": "Accuracy=63.0%, V7 Thermodynamics Engine + AURN Network",
       "accuracy_percentage": 63.0,
       "test_mae": 2.41,
-      "mase": 1.94,
       "station_count": 51,
       "last_data_date": "2026-06-17",
       "forecast_days": 30
@@ -57,17 +54,16 @@
       "reason": "Accuracy=68.7%, V7 Thermodynamics Engine + NSW EPA",
       "accuracy_percentage": 68.7,
       "test_mae": 1.88,
-      "mase": 0.64,
       "station_count": 51,
       "last_data_date": "2026-06-17",
       "forecast_days": 30
     }
   },
   "accuracy": {
-    "mae": 5.89,
-    "accuracy_percentage": 61.9,
-    "source": "backtest",
-    "sample_count": 4878,
+    "mae": null,
+    "accuracy_percentage": null,
+    "source": "none",
+    "sample_count": 0,
     "live_validation_count": 0,
     "note": "Live metrics require 100+ validated completed forecasts. Backtest metrics are recent one-step checks against known actuals."
   }

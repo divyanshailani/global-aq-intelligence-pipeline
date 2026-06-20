@@ -28,6 +28,9 @@ import joblib
 import numpy as np
 import pandas as pd
 import psycopg2
+import xgboost as xgb
+import pandas as pd
+import psycopg2
 from psycopg2.extras import execute_values
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -35,7 +38,7 @@ from src.config import DB_CONFIG, MODEL_DIR as _MODEL_DIR, SITE_DATA_DIR
 
 MODEL_DIR = _MODEL_DIR
 V7_MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models", "v7")  # Production
-V8_MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models", "v8")  # Experimental
+V9_MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models", "v9")  # XGBoost Production
 OUTPUT_DIR = SITE_DATA_DIR
 
 COUNTRIES = ["IN", "US", "GB", "AU"]
@@ -427,18 +430,14 @@ def predict_direct_v7(country_code, last_row, station_forecast):
         climatology_baseline[feat] = np.mean(valid_vals) if valid_vals else 0
         
     for h in [1, 7, 14, 30]:
-        model_path = os.path.join(V8_MODEL_DIR, f"{country_code}_pm25_h{h}_gbr.pkl")
-        meta_path  = os.path.join(V8_MODEL_DIR, f"{country_code}_pm25_h{h}_meta.json")
+        model_path = os.path.join(V9_MODEL_DIR, f"{country_code}_pm25_h{h}_xgb.json")
+        meta_path  = os.path.join(V9_MODEL_DIR, f"{country_code}_pm25_h{h}_meta.json")
         
-        # Fallback to V7 if V8 is missing
-        if not os.path.exists(model_path):
-            model_path = os.path.join(V7_MODEL_DIR, f"{country_code}_pm25_h{h}_gbr.pkl")
-            meta_path  = os.path.join(V7_MODEL_DIR, f"{country_code}_pm25_h{h}_meta.json")
-            
-
         if not os.path.exists(model_path):
             continue
-        model = joblib.load(model_path)
+            
+        model = xgb.XGBRegressor()
+        model.load_model(model_path)
         with open(meta_path) as f:
             meta = json.load(f)
         feat_cols = meta["features"]
