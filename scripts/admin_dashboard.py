@@ -512,7 +512,7 @@ def _run_retrain():
                 add_log(line.strip())
 
         if result.returncode == 0:
-            add_log("✅ RETRAIN COMPLETE — new models saved to models/v7_exp/")
+            add_log("✅ RETRAIN COMPLETE — new models saved to models/v8/")
             pipeline_state["result"] = "success"
         else:
             add_log(f"❌ Train error: {result.stderr[:500]}")
@@ -835,11 +835,11 @@ ADMIN_HTML = """<!DOCTYPE html>
             </table>
         </div>
 
-        <!-- V7 Live Validation -->
-        <div class="card" style="margin-top: 1.25rem; background: rgba(79, 184, 176, 0.05); border: 1px solid rgba(79, 184, 176, 0.3);">
-            <div class="card-title" style="color: #4fb8b0;">⚡ V7 Live Validation (Real-World Accuracy)</div>
-            <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">
-                Tracking the daily live MAE error between V7 Weather-Aware predictions and actual PM2.5 readings.
+        <!-- V8 Live Validation -->
+        <div class="card">
+            <div class="card-title" style="color: #4fb8b0;">⚡ V8 Live Validation (Real-World Accuracy)</div>
+            <div class="card-subtitle">
+                Tracking the daily live MAE error between V8 Horizon-Aligned predictions and actual PM2.5 readings.
             </div>
             <table class="table">
                 <thead>
@@ -847,7 +847,7 @@ ADMIN_HTML = """<!DOCTYPE html>
                         <th>Country</th><th>Samples Validated</th><th>Live MAE (µg/m³)</th><th>Live R²</th>
                     </tr>
                 </thead>
-                <tbody id="v7Validation">
+                <tbody id="v8Validation">
                     <!-- Populated by JS -->
                 </tbody>
             </table>

@@ -1,0 +1,35 @@
+{
+  "country": "GB",
+  "model": "GradientBoostingRegressor",
+  "version": "v8_horizon_aligned",
+  "horizon_days": 1,
+  "features": [
+    "pm25_lag_1",
+    "pm25_rolling_mean_3d",
+    "pm25_rolling_std_3d",
+    "month",
+    "day_of_year",
+    "day_of_week",
+    "future_temp",
+    "future_wind",
+    "future_precip"
+  ],
+  "feature_medians": {
+    "pm25_lag_1": 6.505437499999999,
+    "pm25_rolling_mean_3d": 6.979833333333331,
+    "pm25_rolling_std_3d": 2.1892994187337145,
+    "month": 3.0,
+    "day_of_year": 84.0,
+    "day_of_week": 3.0,
+    "future_temp": 8.5,
+    "future_wind": 20.9,
+    "future_precip": 0.8
+  },
+  "metrics": {
+    "test_r2": 0.1564,
+    "test_mae": 2.34,
+    "test_rmse": 11.76,
+    "nmae": 0.3694,
+    "mase": 0.88
+  }
+}

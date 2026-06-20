@@ -1,0 +1,35 @@
+{
+  "country": "IN",
+  "model": "GradientBoostingRegressor",
+  "version": "v8_horizon_aligned",
+  "horizon_days": 30,
+  "features": [
+    "pm25_lag_30",
+    "pm25_rolling_mean_3d",
+    "pm25_rolling_std_3d",
+    "month",
+    "day_of_year",
+    "day_of_week",
+    "future_temp",
+    "future_wind",
+    "future_precip"
+  ],
+  "feature_medians": {
+    "pm25_lag_30": 55.02801136363637,
+    "pm25_rolling_mean_3d": 56.733485449735454,
+    "pm25_rolling_std_3d": 11.678348510514624,
+    "month": 4.0,
+    "day_of_year": 97.0,
+    "day_of_week": 3.0,
+    "future_temp": 26.6,
+    "future_wind": 15.8,
+    "future_precip": 0.0
+  },
+  "metrics": {
+    "test_r2": 0.0715,
+    "test_mae": 15.95,
+    "test_rmse": 28.17,
+    "nmae": 0.4216,
+    "mase": 0.52
+  }
+}
