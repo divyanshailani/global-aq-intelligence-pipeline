@@ -156,3 +156,19 @@ We developed the **V9.4 Geospatial Ensemble Router**:
 2. **Fading Memory (EMA)**: We ripped out the 30-day baseline for short horizons and upgraded the 3-day mean to an Exponential Moving Average (EMA), prioritizing yesterday's pollution to capture rapid fluctuations.
 3. **SUOMI VIIRS Spatial Engine**: We implemented the Haversine formula to bridge satellite fire coordinates with ground stations, creating a dynamic `fire_density_100km` and `fire_radiative_power_total` blast radius for each station.
 4. **Dynamic Routing**: Since Great Britain relies heavily on long-term 30-day climatology, we introduced a dynamic router that maintains the V9 model for GB at long horizons ($h=14, 30$), while using the upgraded V9.4 engine for all other nodes globally.
+
+---
+
+## 14. V10 Stagnation Physics & Hemispheric Upwind Engine (Failed R&D)
+**Issue:**
+During a rigorous autopsy of V9.4, we identified a critical blind spot: the model catastrophically under-predicts massive PM2.5 spikes (>150 µg/m³), with errors averaging 87.48 µg/m³ during these extreme events. These spikes primarily occur during "Stagnation Events" (low precipitation, low wind, high fire density). 
+
+**Attempted Solution (V10 / V10.1):**
+We hypothesized that injecting non-linear accumulation physics and upwind spatial logic would solve this. We engineered two complex features:
+1. `stagnation_index`: A log-scaled ratio of fire radiative power to weather dispersion (`np.log1p(fire_power / (precip + wind + 0.1))`).
+2. `upwind_fire_power`: A 180-degree hemispheric sweep that only summed fire brightness if the fire was located upwind of the station based on forward bearing.
+
+**Result & Conclusion:**
+The V10.1 logic backfired. It worsened the MAE on extreme spikes from 87.48 to 91.62 µg/m³, and slightly degraded overall MAE. By engineering hyper-specific synthetic indices, we tied variables together into a single column, which forced the XGBoost trees down a specific path and stripped away their ability to find subtle micro-patterns in the raw data (Raw Total Fire Power, Raw Wind Speed).
+
+We mathematically proved that **V9.4** (Delta Targets, Synthetic Memory, and Raw 100km Blast Radius) is the absolute ceiling for the current dataset. Hand-engineered physics indices were abandoned in favor of raw statistical signals.
