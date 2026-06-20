@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-06-20T15:11:37.581154",
-  "model_version": "v7_weather_direct",
+  "generated_at": "2026-06-20T17:35:25.540639",
+  "model_version": "v9_xgboost_global",
   "countries": {
     "IN": {
       "name": "India",
@@ -9,9 +9,10 @@
       "confidence": "high",
       "tag": "High Confidence",
       "tag_color": "green",
-      "reason": "Accuracy=75.0% on 31K features, V7 Thermodynamics Engine + CPCB",
-      "accuracy_percentage": 75.0,
-      "test_mae": 9.26,
+      "reason": "Accuracy=72.5%, V9 XGBoost Engine",
+      "accuracy_percentage": 72.52,
+      "test_mae": 10.41,
+      "mase": 2.75,
       "station_count": 51,
       "last_data_date": "2026-06-17",
       "forecast_days": 30
@@ -23,9 +24,10 @@
       "confidence": "high",
       "tag": "High Confidence",
       "tag_color": "green",
-      "reason": "Accuracy=65.3% on 1.4M features, V7 Thermodynamics Engine + EPA AQS",
-      "accuracy_percentage": 65.3,
-      "test_mae": 2.24,
+      "reason": "Accuracy=67.8%, V9 XGBoost Engine",
+      "accuracy_percentage": 67.85,
+      "test_mae": 2.35,
+      "mase": 1.81,
       "station_count": 51,
       "last_data_date": "2026-06-16",
       "forecast_days": 30
@@ -37,9 +39,10 @@
       "confidence": "experimental",
       "tag": "Experimental: Limited Seasonal Data",
       "tag_color": "yellow",
-      "reason": "Accuracy=63.0%, V7 Thermodynamics Engine + AURN Network",
-      "accuracy_percentage": 63.0,
-      "test_mae": 2.41,
+      "reason": "Accuracy=64.4%, V9 XGBoost Engine",
+      "accuracy_percentage": 64.37,
+      "test_mae": 2.26,
+      "mase": 1.77,
       "station_count": 51,
       "last_data_date": "2026-06-17",
       "forecast_days": 30
@@ -51,19 +54,20 @@
       "confidence": "stable",
       "tag": "Low Variance / Stable",
       "tag_color": "blue",
-      "reason": "Accuracy=68.7%, V7 Thermodynamics Engine + NSW EPA",
-      "accuracy_percentage": 68.7,
-      "test_mae": 1.88,
+      "reason": "Accuracy=68.4%, V9 XGBoost Engine",
+      "accuracy_percentage": 68.42,
+      "test_mae": 1.91,
+      "mase": 1.29,
       "station_count": 51,
       "last_data_date": "2026-06-17",
       "forecast_days": 30
     }
   },
   "accuracy": {
-    "mae": null,
-    "accuracy_percentage": null,
-    "source": "none",
-    "sample_count": 0,
+    "mae": 10.08,
+    "accuracy_percentage": 34.9,
+    "source": "backtest",
+    "sample_count": 4878,
     "live_validation_count": 0,
     "note": "Live metrics require 100+ validated completed forecasts. Backtest metrics are recent one-step checks against known actuals."
   }
