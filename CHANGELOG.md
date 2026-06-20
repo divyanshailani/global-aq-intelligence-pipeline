@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [7.0.0] - V7 Thermodynamics Engine
+
 ### Historical Architecture: V7 Direct Thermodynamics Engine
 
 The core insight from v5 development: chaining Day-1 predictions into Day-2's lag features compounds error exponentially. By Day-30 the model was predicting noise.
@@ -48,3 +50,39 @@ The core insight from v5 development: chaining Day-1 predictions into Day-2's la
 - `value` (today's PM2.5) holds ~82% feature importance for h1 India — the model is a physics-backed persistence model at short range
 - US h7 R²=0.14 — a single country-level GBR is too coarse for 1,400 geographically diverse stations
 - India h30 overfit delta = 0.45 (train R²=0.88 vs test R²=0.43)
+
+---
+
+## [6.0.0] - V6 Direct Multi-Horizon
+- **Direct Multi-Horizon Architecture**: Separated the model into 4 independent GBRs per country targeting specific horizons (`1d`, `7d`, `14d`, `30d`). 
+- Completely abandoned the chained looping mechanism to prevent recursive error compounding.
+
+---
+
+## [5.0.0] - V5 Chained GBR
+- **Recursive 30-Day Loop**: Implemented a recursive prediction loop feeding Day 1's prediction as `lag_1` into Day 2.
+- **The Chaining Collapse**: Led to exponential error degradation; predictions beyond day 15 became pure noise.
+
+---
+
+## [4.0.0] - Temporal Memory Features
+- **Temporal Memory Injection**: Engineered a robust suite of temporal features including short/long lags (`lag_1` to `lag_30`), rolling means, and rolling volatility.
+- **Massive Performance Gain**: Short-term $R^2$ skyrocketed from ~0.31 to 0.97 by giving the model memory of yesterday's air quality.
+
+---
+
+## [3.0.0] - NASA POWER Migration
+- **Open-Meteo Null Rate Failure**: Discarded Open-Meteo for historical training data due to a catastrophic 63% null rate in Indian coverage areas.
+- **Satellite Data Integration**: Successfully integrated the NASA POWER API (satellite-derived global meteorology), plummeting the missing data rate to 0.15%.
+
+---
+
+## [2.0.0] - Co-Pollutant Integration
+- **Chemical Context**: Added co-pollutants ($NO_2$, $CO$, $O_3$, $SO_2$) to the feature set.
+- **Data Leakage Fix**: Prevented "cheating" by strictly shifting chemical context backward (e.g., using yesterday's $NO_2$), restricting the model from using unavailable same-day data in live production.
+
+---
+
+## [1.0.0] - Initial Prototype
+- **Baseline Model**: Basic PM2.5 prediction using Gradient Boosting Regressors.
+- **Temporal Split Validation**: Migrated away from random `train_test_split` to a strict chronological walk-forward split (80/20) to prevent severe time-series data leakage.
