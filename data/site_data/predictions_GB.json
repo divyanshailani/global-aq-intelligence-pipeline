@@ -9,9 +9,10 @@
     "tag_color": "yellow",
     "reason": "Accuracy=63.0%, V7 Thermodynamics Engine + AURN Network",
     "accuracy_percentage": 63.0,
-    "test_mae": 2.41
+    "test_mae": 2.41,
+    "mase": 1.94
   },
-  "generated_at": "2026-06-20T07:26:52.646091",
+  "generated_at": "2026-06-20T07:44:20.367194",
   "last_data_date": "2026-06-17",
   "forecast": [
     {

@@ -9,9 +9,10 @@
     "tag_color": "blue",
     "reason": "Accuracy=68.7%, V7 Thermodynamics Engine + NSW EPA",
     "accuracy_percentage": 68.7,
-    "test_mae": 1.88
+    "test_mae": 1.88,
+    "mase": 0.64
   },
-  "generated_at": "2026-06-20T07:27:46.985874",
+  "generated_at": "2026-06-20T07:45:12.113254",
   "last_data_date": "2026-06-17",
   "forecast": [
     {
