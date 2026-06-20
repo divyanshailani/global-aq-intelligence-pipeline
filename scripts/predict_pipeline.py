@@ -214,6 +214,7 @@ def backtest_recent(conn, n_days=7):
     
     all_actuals = []
     all_preds = []
+    all_naives = []
     country_metrics = {}
 
     for cc in COUNTRIES:
@@ -282,24 +283,43 @@ def backtest_recent(conn, n_days=7):
         nmae = mae / mean_y if mean_y > 0 else 0
         acc_pct = max(0.0, (1.0 - nmae) * 100.0)
 
-        country_metrics[cc] = {"accuracy_percentage": round(acc_pct, 1), "mae": round(mae, 2), "n": len(y_actual)}
+        # MASE Calculation
+        y_naive = test_df["lag_1"].values
+        naive_mae = float(np.mean(np.abs(y_actual - y_naive)))
+        mase = mae / naive_mae if naive_mae > 0 else 0
+        
+        COUNTRY_META[cc]["mase"] = round(mase, 2)
+
+        country_metrics[cc] = {
+            "accuracy_percentage": round(acc_pct, 1), 
+            "mae": round(mae, 2), 
+            "mase": round(mase, 2),
+            "n": len(y_actual)
+        }
         all_actuals.extend(y_actual.tolist())
         all_preds.extend(y_pred.tolist())
+        all_naives.extend(y_naive.tolist())
 
-        print(f"    {cc}: Acc={acc_pct:.1f}%  MAE={mae:.2f} µg/m³  ({len(y_actual)} samples)")
+        print(f"    {cc}: Acc={acc_pct:.1f}%  MAE={mae:.2f} µg/m³  MASE={mase:.2f}  ({len(y_actual)} samples)")
 
     if all_actuals:
         actuals = np.array(all_actuals)
         preds = np.array(all_preds)
+        naives = np.array(all_naives)
+        
         overall_mae = float(np.mean(np.abs(actuals - preds)))
         mean_y_overall = float(np.mean(actuals))
         overall_nmae = overall_mae / mean_y_overall if mean_y_overall > 0 else 0
         overall_acc = max(0.0, (1.0 - overall_nmae) * 100.0)
 
+        overall_naive_mae = float(np.mean(np.abs(actuals - naives)))
+        overall_mase = overall_mae / overall_naive_mae if overall_naive_mae > 0 else 0
+
         print(f"\n  📊 Backtest (last {n_days}d):")
-        print(f"     Overall Acc: {overall_acc:.1f}%")
-        print(f"     Overall MAE: {overall_mae:.2f} µg/m³")
-        print(f"     Samples:     {len(actuals):,}")
+        print(f"     Overall Acc:  {overall_acc:.1f}%")
+        print(f"     Overall MAE:  {overall_mae:.2f} µg/m³")
+        print(f"     Overall MASE: {overall_mase:.2f}")
+        print(f"     Samples:      {len(actuals):,}")
 
         return overall_mae, overall_acc, len(actuals), country_metrics
     
@@ -698,7 +718,11 @@ def export_site_data(predictions, metric_mae, metric_acc, metric_source,
         "sample_count": metric_sample_count,
         "live_validation_count": live_validation_count,
         "training_metrics": {
-            cc: {"accuracy_percentage": m.get("accuracy_percentage"), "mae": m["test_mae"]}
+            cc: {
+                "accuracy_percentage": m.get("accuracy_percentage"), 
+                "mae": m.get("test_mae", m.get("mae")),
+                "mase": m.get("mase")
+            }
             for cc, m in COUNTRY_META.items()
         },
         "confidence_explanation": {

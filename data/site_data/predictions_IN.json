@@ -9,9 +9,10 @@
     "tag_color": "green",
     "reason": "Accuracy=75.0% on 31K features, V7 Thermodynamics Engine + CPCB",
     "accuracy_percentage": 75.0,
-    "test_mae": 9.26
+    "test_mae": 9.26,
+    "mase": 1.51
   },
-  "generated_at": "2026-06-20T07:25:05.687964",
+  "generated_at": "2026-06-20T07:42:31.226917",
   "last_data_date": "2026-06-17",
   "forecast": [
     {
