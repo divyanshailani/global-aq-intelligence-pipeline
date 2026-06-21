@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-06-21T17:11:12.802061",
-  "last_pipeline_run": "2026-06-21T17:11:12.802067",
+  "generated_at": "2026-06-21T18:25:56.429682",
+  "last_pipeline_run": "2026-06-21T18:25:56.429686",
   "mae": null,
   "accuracy_percentage": null,
   "source": "none",
@@ -8,23 +8,23 @@
   "live_validation_count": 0,
   "training_metrics": {
     "IN": {
-      "accuracy_percentage": 73.96,
-      "mae": 10.02,
+      "accuracy_percentage": 74.29,
+      "mae": 9.89,
       "mase": null
     },
     "US": {
-      "accuracy_percentage": 69.33,
-      "mae": 2.24,
+      "accuracy_percentage": 69.7,
+      "mae": 2.22,
       "mase": null
     },
     "GB": {
-      "accuracy_percentage": 64.87,
-      "mae": 2.24,
+      "accuracy_percentage": 66.83,
+      "mae": 2.11,
       "mase": null
     },
     "AU": {
-      "accuracy_percentage": 69.79,
-      "mae": 1.82,
+      "accuracy_percentage": 69.94,
+      "mae": 1.81,
       "mase": null
     }
   },

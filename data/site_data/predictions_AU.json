@@ -7,12 +7,12 @@
     "confidence": "stable",
     "tag": "Low Variance / Stable",
     "tag_color": "blue",
-    "reason": "Accuracy=69.8%, V11 3D Atmospheric Ensemble",
-    "accuracy_percentage": 69.79,
-    "test_mae": 1.82,
+    "reason": "Accuracy=69.9%, V11 3D Atmospheric Ensemble",
+    "accuracy_percentage": 69.94,
+    "test_mae": 1.81,
     "fire_count": 1505
   },
-  "generated_at": "2026-06-21T17:11:12.034829",
+  "generated_at": "2026-06-21T18:25:55.669548",
   "last_data_date": "2026-06-17",
   "forecast": [
     {
@@ -20,14 +20,14 @@
       "horizon_days": 4,
       "confidence": "high",
       "confidence_pct": 86,
-      "mean_pm25": 5.916399999999999,
-      "min_pm25": 3.013,
-      "max_pm25": 9.642,
+      "mean_pm25": 5.8678,
+      "min_pm25": 2.895,
+      "max_pm25": 9.357000000000001,
       "stations": 50,
       "weather_context": {
         "temp": 7.5,
         "wind": 7.0,
-        "precip": 1.6
+        "precip": 0.6
       }
     },
     {
@@ -35,14 +35,14 @@
       "horizon_days": 5,
       "confidence": "high",
       "confidence_pct": 83,
-      "mean_pm25": 6.215800000000001,
-      "min_pm25": 3.38,
-      "max_pm25": 10.430000000000001,
+      "mean_pm25": 6.0262,
+      "min_pm25": 3.6180000000000003,
+      "max_pm25": 10.276,
       "stations": 50,
       "weather_context": {
         "temp": 7.5,
         "wind": 9.9,
-        "precip": 0.2
+        "precip": 0.5
       }
     },
     {
@@ -50,9 +50,9 @@
       "horizon_days": 6,
       "confidence": "high",
       "confidence_pct": 80,
-      "mean_pm25": 6.5958000000000006,
-      "min_pm25": 4.322,
-      "max_pm25": 10.304,
+      "mean_pm25": 6.3953999999999995,
+      "min_pm25": 3.973,
+      "max_pm25": 10.216999999999999,
       "stations": 50,
       "weather_context": {
         "temp": 5.0,
@@ -65,9 +65,9 @@
       "horizon_days": 7,
       "confidence": "high",
       "confidence_pct": 77,
-      "mean_pm25": 7.0144,
-      "min_pm25": 4.852,
-      "max_pm25": 10.596,
+      "mean_pm25": 6.7776,
+      "min_pm25": 4.452000000000001,
+      "max_pm25": 10.307,
       "stations": 50,
       "weather_context": {
         "temp": 5.9,
@@ -80,9 +80,9 @@
       "horizon_days": 8,
       "confidence": "medium",
       "confidence_pct": 68,
-      "mean_pm25": 6.3660000000000005,
-      "min_pm25": 3.72,
-      "max_pm25": 10.062000000000001,
+      "mean_pm25": 6.1588,
+      "min_pm25": 3.61,
+      "max_pm25": 10.075000000000001,
       "stations": 50,
       "weather_context": {
         "temp": 7.6,
@@ -95,9 +95,9 @@
       "horizon_days": 9,
       "confidence": "medium",
       "confidence_pct": 65,
-      "mean_pm25": 6.2358,
-      "min_pm25": 4.1209999999999996,
-      "max_pm25": 9.993,
+      "mean_pm25": 6.086,
+      "min_pm25": 3.688,
+      "max_pm25": 10.105,
       "stations": 50,
       "weather_context": {
         "temp": 7.0,
@@ -110,9 +110,9 @@
       "horizon_days": 10,
       "confidence": "medium",
       "confidence_pct": 62,
-      "mean_pm25": 6.007000000000001,
-      "min_pm25": 3.865,
-      "max_pm25": 9.249,
+      "mean_pm25": 5.9424,
+      "min_pm25": 3.539,
+      "max_pm25": 9.536999999999999,
       "stations": 50,
       "weather_context": {
         "temp": 6.5,
@@ -125,9 +125,9 @@
       "horizon_days": 11,
       "confidence": "medium",
       "confidence_pct": 60,
-      "mean_pm25": 5.777,
-      "min_pm25": 3.899,
-      "max_pm25": 8.154,
+      "mean_pm25": 5.6622,
+      "min_pm25": 3.455,
+      "max_pm25": 8.114,
       "stations": 50,
       "weather_context": {
         "temp": 6.7,
@@ -140,9 +140,9 @@
       "horizon_days": 12,
       "confidence": "medium",
       "confidence_pct": 58,
-      "mean_pm25": 4.7358,
-      "min_pm25": 3.075,
-      "max_pm25": 6.924,
+      "mean_pm25": 4.6764,
+      "min_pm25": 2.972,
+      "max_pm25": 7.2540000000000004,
       "stations": 50,
       "weather_context": {
         "temp": 9.3,
@@ -155,9 +155,9 @@
       "horizon_days": 13,
       "confidence": "medium",
       "confidence_pct": 55,
-      "mean_pm25": 4.9518,
-      "min_pm25": 3.01,
-      "max_pm25": 7.563000000000001,
+      "mean_pm25": 4.9132,
+      "min_pm25": 2.781,
+      "max_pm25": 7.854,
       "stations": 50,
       "weather_context": {
         "temp": 8.6,
@@ -170,9 +170,9 @@
       "horizon_days": 14,
       "confidence": "medium",
       "confidence_pct": 52,
-      "mean_pm25": 5.5352,
-      "min_pm25": 3.726,
-      "max_pm25": 7.601000000000001,
+      "mean_pm25": 5.4936,
+      "min_pm25": 3.451,
+      "max_pm25": 7.954,
       "stations": 50,
       "weather_context": {
         "temp": 9.2,
@@ -185,9 +185,9 @@
       "horizon_days": 15,
       "confidence": "medium",
       "confidence_pct": 50,
-      "mean_pm25": 5.513,
-      "min_pm25": 3.8489999999999998,
-      "max_pm25": 7.8229999999999995,
+      "mean_pm25": 5.474600000000001,
+      "min_pm25": 3.242,
+      "max_pm25": 8.131,
       "stations": 50,
       "weather_context": {
         "temp": 6.1,
@@ -200,9 +200,9 @@
       "horizon_days": 16,
       "confidence": "low",
       "confidence_pct": 48,
-      "mean_pm25": 5.0402,
-      "min_pm25": 3.216,
-      "max_pm25": 7.299,
+      "mean_pm25": 5.234400000000001,
+      "min_pm25": 3.035,
+      "max_pm25": 7.753,
       "stations": 50,
       "weather_context": {
         "temp": 7.3,
@@ -215,9 +215,9 @@
       "horizon_days": 17,
       "confidence": "low",
       "confidence_pct": 47,
-      "mean_pm25": 5.1132,
-      "min_pm25": 3.2439999999999998,
-      "max_pm25": 7.271000000000001,
+      "mean_pm25": 5.3148,
+      "min_pm25": 3.151,
+      "max_pm25": 7.961,
       "stations": 50,
       "weather_context": {
         "temp": 6.4,
@@ -230,9 +230,9 @@
       "horizon_days": 18,
       "confidence": "low",
       "confidence_pct": 46,
-      "mean_pm25": 5.1858,
-      "min_pm25": 3.272,
-      "max_pm25": 7.3500000000000005,
+      "mean_pm25": 5.395599999999999,
+      "min_pm25": 3.1930000000000005,
+      "max_pm25": 7.94,
       "stations": 50,
       "weather_context": {
         "temp": 7.4,
@@ -245,12 +245,12 @@
       "horizon_days": 19,
       "confidence": "low",
       "confidence_pct": 44,
-      "mean_pm25": 5.2592,
-      "min_pm25": 3.4000000000000004,
-      "max_pm25": 7.523,
+      "mean_pm25": 5.4762,
+      "min_pm25": 3.195,
+      "max_pm25": 8.18,
       "stations": 50,
       "weather_context": {
-        "temp": 7.6,
+        "temp": 8.2,
         "wind": 18.8,
         "precip": 0.1
       }
@@ -260,9 +260,9 @@
       "horizon_days": 20,
       "confidence": "low",
       "confidence_pct": 42,
-      "mean_pm25": 5.3332,
-      "min_pm25": 3.492,
-      "max_pm25": 7.631,
+      "mean_pm25": 5.5554,
+      "min_pm25": 3.227,
+      "max_pm25": 8.373999999999999,
       "stations": 50
     },
     {
@@ -270,9 +270,9 @@
       "horizon_days": 21,
       "confidence": "low",
       "confidence_pct": 41,
-      "mean_pm25": 5.4064,
-      "min_pm25": 3.486,
-      "max_pm25": 7.832000000000001,
+      "mean_pm25": 5.6362,
+      "min_pm25": 3.271,
+      "max_pm25": 8.399,
       "stations": 50
     },
     {
@@ -280,9 +280,9 @@
       "horizon_days": 22,
       "confidence": "low",
       "confidence_pct": 40,
-      "mean_pm25": 5.4798,
-      "min_pm25": 3.479,
-      "max_pm25": 8.042,
+      "mean_pm25": 5.7170000000000005,
+      "min_pm25": 3.2800000000000002,
+      "max_pm25": 8.433000000000002,
       "stations": 50
     },
     {
@@ -290,9 +290,9 @@
       "horizon_days": 23,
       "confidence": "low",
       "confidence_pct": 38,
-      "mean_pm25": 5.553,
-      "min_pm25": 3.473,
-      "max_pm25": 8.104000000000001,
+      "mean_pm25": 5.7976,
+      "min_pm25": 3.295,
+      "max_pm25": 8.656,
       "stations": 50
     },
     {
@@ -300,9 +300,9 @@
       "horizon_days": 24,
       "confidence": "low",
       "confidence_pct": 36,
-      "mean_pm25": 5.625800000000001,
-      "min_pm25": 3.466,
-      "max_pm25": 8.098,
+      "mean_pm25": 5.8776,
+      "min_pm25": 3.309,
+      "max_pm25": 8.924,
       "stations": 50
     },
     {
@@ -310,9 +310,9 @@
       "horizon_days": 25,
       "confidence": "low",
       "confidence_pct": 35,
-      "mean_pm25": 5.699,
-      "min_pm25": 3.46,
-      "max_pm25": 8.298,
+      "mean_pm25": 5.9578,
+      "min_pm25": 3.356,
+      "max_pm25": 9.201,
       "stations": 50
     },
     {
@@ -320,9 +320,9 @@
       "horizon_days": 26,
       "confidence": "low",
       "confidence_pct": 34,
-      "mean_pm25": 5.7724,
-      "min_pm25": 3.477,
-      "max_pm25": 8.499,
+      "mean_pm25": 6.0386,
+      "min_pm25": 3.41,
+      "max_pm25": 9.469000000000001,
       "stations": 50
     },
     {
@@ -330,9 +330,9 @@
       "horizon_days": 27,
       "confidence": "low",
       "confidence_pct": 32,
-      "mean_pm25": 5.8458000000000006,
-      "min_pm25": 3.5029999999999997,
-      "max_pm25": 8.699000000000002,
+      "mean_pm25": 6.1184,
+      "min_pm25": 3.465,
+      "max_pm25": 9.746,
       "stations": 50
     },
     {
@@ -340,9 +340,9 @@
       "horizon_days": 28,
       "confidence": "low",
       "confidence_pct": 30,
-      "mean_pm25": 5.9192,
+      "mean_pm25": 6.1988,
       "min_pm25": 3.52,
-      "max_pm25": 8.909,
+      "max_pm25": 10.014000000000001,
       "stations": 50
     },
     {
@@ -350,9 +350,9 @@
       "horizon_days": 29,
       "confidence": "low",
       "confidence_pct": 30,
-      "mean_pm25": 5.992000000000001,
-      "min_pm25": 3.545,
-      "max_pm25": 9.109000000000002,
+      "mean_pm25": 6.2791999999999994,
+      "min_pm25": 3.575,
+      "max_pm25": 10.283000000000001,
       "stations": 50
     },
     {
@@ -360,9 +360,9 @@
       "horizon_days": 30,
       "confidence": "low",
       "confidence_pct": 30,
-      "mean_pm25": 6.740399999999999,
-      "min_pm25": 4.758,
-      "max_pm25": 9.684000000000001,
+      "mean_pm25": 6.780600000000001,
+      "min_pm25": 4.460999999999999,
+      "max_pm25": 10.56,
       "stations": 50
     }
   ],
