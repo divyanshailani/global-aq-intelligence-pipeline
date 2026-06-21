@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-21T17:11:12.801631",
+  "generated_at": "2026-06-21T18:25:56.429385",
   "model_version": "v11_xgboost_global",
   "countries": {
     "IN": {
@@ -9,9 +9,9 @@
       "confidence": "high",
       "tag": "High Confidence",
       "tag_color": "green",
-      "reason": "Accuracy=74.0%, V11 3D Atmospheric Ensemble",
-      "accuracy_percentage": 73.96,
-      "test_mae": 10.02,
+      "reason": "Accuracy=74.3%, V11 3D Atmospheric Ensemble",
+      "accuracy_percentage": 74.29,
+      "test_mae": 9.89,
       "station_count": 51,
       "last_data_date": "2026-06-17",
       "forecast_days": 30
@@ -23,9 +23,9 @@
       "confidence": "high",
       "tag": "High Confidence",
       "tag_color": "green",
-      "reason": "Accuracy=69.3%, V11 3D Atmospheric Ensemble",
-      "accuracy_percentage": 69.33,
-      "test_mae": 2.24,
+      "reason": "Accuracy=69.7%, V11 3D Atmospheric Ensemble",
+      "accuracy_percentage": 69.7,
+      "test_mae": 2.22,
       "station_count": 51,
       "last_data_date": "2026-06-16",
       "forecast_days": 30
@@ -37,9 +37,9 @@
       "confidence": "experimental",
       "tag": "Experimental: Limited Seasonal Data",
       "tag_color": "yellow",
-      "reason": "Accuracy=64.9%, V11 3D Atmospheric Ensemble (Long-Term: V9)",
-      "accuracy_percentage": 64.87,
-      "test_mae": 2.24,
+      "reason": "Accuracy=66.8%, V11 3D Atmospheric Ensemble (Long-Term: V9)",
+      "accuracy_percentage": 66.83,
+      "test_mae": 2.11,
       "station_count": 51,
       "last_data_date": "2026-06-17",
       "forecast_days": 30
@@ -51,9 +51,9 @@
       "confidence": "stable",
       "tag": "Low Variance / Stable",
       "tag_color": "blue",
-      "reason": "Accuracy=69.8%, V11 3D Atmospheric Ensemble",
-      "accuracy_percentage": 69.79,
-      "test_mae": 1.82,
+      "reason": "Accuracy=69.9%, V11 3D Atmospheric Ensemble",
+      "accuracy_percentage": 69.94,
+      "test_mae": 1.81,
       "station_count": 51,
       "last_data_date": "2026-06-17",
       "forecast_days": 30
