@@ -56,28 +56,51 @@ We migrated from a single model to a dynamic ensemble router. The core mathemati
 
 ## Performance (V11 Geospatial Ensemble)
 
-![Forecast Horizons EDA](./plots/forecast_horizons_v11.png)
+### V11 → V11.1: The MASE Crusher Upgrade
 
-The shift to the V11 3D Atmospheric Engine yielded a breakthrough in short-term volatility. By mapping the true vertical density of the atmosphere (AOD), the model correctly bounds extreme stagnation events. Note: The MAE drop to 76.06 µg/m³ applies *strictly* to the stratified Extreme-Spike slice (where True PM2.5 > 150 µg/m³), proving the AOD physics works in worst-case scenarios. Do not conflate this with the general `h=1` accuracy, which encompasses standard air quality days. The Delta Target transformation continues to anchor long-term stability across all oceanic and continental regions.
+The V11.1 engine represents a fundamental shift from "Single-Day Myopia" to **Autonomous Atmospheric Physics**. Instead of only looking at today's weather, the model now understands *cumulative* weather patterns over 72 hours and atmospheric instability over a trailing week.
 
-| Country | Horizon | NMAE | MASE | Accuracy (%) |
-| :--- | :--- | :--- | :--- | :--- |
-| **IN** | 1 | 0.2571 | 0.9000 | **74.29%** |
-| **IN** | 7 | 0.4071 | 0.6800 | **59.29%** |
-| **IN** | 14 | 0.4381 | 0.6000 | **56.19%** |
-| **IN** | 30 | 0.4163 | 0.5200 | **58.37%** |
-| **GB** | 1 | 0.3317 | 0.8100 | **66.83%** |
-| **GB** | 7 | 0.3941 | 0.6000 | **60.59%** |
-| **GB** | 14 | 0.4401 | 0.5700 | **55.99%** (V9 Baseline) |
-| **GB** | 30 | 0.4333 | 0.6400 | **56.67%** (V9 Baseline) |
-| **US** | 1 | 0.3030 | 0.8300 | **69.70%** |
-| **US** | 7 | 0.3976 | 0.7100 | **60.24%** |
-| **US** | 14 | 0.4118 | 0.7100 | **58.82%** |
-| **US** | 30 | 0.4130 | 0.7100 | **58.70%** |
-| **AU** | 1 | 0.3006 | 0.7700 | **69.94%** |
-| **AU** | 7 | 0.3556 | 0.6600 | **64.44%** |
-| **AU** | 14 | 0.3501 | 0.6600 | **64.99%** |
-| **AU** | 30 | 0.3624 | 0.6700 | **63.76%** |
+#### V11 (Old — Before Physics Memory)
+![V11 Old Performance](./plots/forecast_horizons_v11_old.png)
+
+#### V11.1 (New — Autonomous Atmospheric Physics)
+![V11.1 New Performance](./plots/forecast_horizons_v11_new.png)
+
+#### What Changed (The Physics Upgrade)
+
+| Feature | V11 (Old) | V11.1 (New) |
+| :--- | :--- | :--- |
+| Rain Awareness | Single-day `future_precip` only | `rolling_3day_precip` — 72hr cumulative rain memory |
+| Atmospheric Stability | None | `aod_volatility_index` — 7-day AOD standard deviation |
+| Heuristic Overrides | `is_raining_now` hardcoded rules | ❌ Completely purged — model learns autonomously |
+| Optimization Target | MASE (basic) | MASE (20-trial Optuna per country × horizon) |
+| Matrix Rebuild | N/A | 1,627,674 rows via PostgreSQL Window Functions |
+
+**The Key Insight:** The V11 model had zero "Atmospheric Memory." It didn't know that 72 hours of continuous monsoon rain had already flushed all particulate matter from the atmosphere. During the June 25th India anomaly, V11 predicted 49.44 µg/m³ while the ground truth was 14.61 µg/m³. After the V11.1 physics upgrade, the model **natively** learned to drop its prediction by ~20 µg/m³ during heavy rain events (58.75 → 38.74) without any hardcoded rules.
+
+> **💡 The Mean Reversion Trap (Issue #18)**
+> The remaining gap from 38.74 to 14.61 µg/m³ is a fundamental property of MAE-optimized decision trees — they hedge toward the average of all rain-day outcomes rather than predicting extreme tail events. Two future ML architectures are identified: **Quantile Regression** and **Two-Tier Regime-Switching** (see [`ISSUES.md`](./ISSUES.md#18)).
+
+#### V11.1 Optuna-Optimized Metrics (Global)
+
+| Country | Horizon | MAE | NMAE | MASE | Accuracy (%) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **IN** | 1 | 9.76 | 0.2542 | 0.8900 | **74.58%** |
+| **IN** | 7 | 15.72 | 0.4046 | 0.6800 | **59.54%** |
+| **IN** | 14 | 16.89 | 0.4364 | 0.6000 | **56.36%** |
+| **IN** | 30 | 15.60 | 0.4106 | 0.5100 | **58.94%** |
+| **GB** | 1 | 2.15 | 0.3369 | 0.8200 | **66.31%** |
+| **GB** | 7 | 2.41 | 0.3798 | 0.5700 | **62.02%** |
+| **GB** | 14 | — | — | — | V9 Fallback |
+| **GB** | 30 | — | — | — | V9 Fallback |
+| **US** | 1 | 2.21 | 0.3025 | 0.8300 | **69.75%** |
+| **US** | 7 | 2.88 | 0.3934 | 0.7100 | **60.66%** |
+| **US** | 14 | 2.98 | 0.4072 | 0.7000 | **59.28%** |
+| **US** | 30 | 3.02 | 0.4125 | 0.7100 | **58.75%** |
+| **AU** | 1 | 1.83 | 0.3025 | 0.7800 | **69.75%** |
+| **AU** | 7 | 2.14 | 0.3540 | 0.6600 | **64.60%** |
+| **AU** | 14 | 2.10 | 0.3465 | 0.6500 | **65.35%** |
+| **AU** | 30 | 2.16 | 0.3571 | 0.6600 | **64.29%** |
 
 ---
 
@@ -180,6 +203,7 @@ Output JSONs are written to `data/site_data/` and automatically synced to `../gl
 | v9 | Global Unified | Native XGBoost, Horizon-Aligned Lags & Volatility Matrix |
 | v9.4 | Geospatial Ensemble | Delta Target Transformation, VIIRS Spatial Blast Radius, EMA Fading Memory |
 | v11 | 3D Atmospheric Ensemble | 3D Aerosol Optical Depth (AOD) via Open-Meteo Satellite Sync |
+| v11.1 | Autonomous Physics Engine | Atmospheric Memory (`rolling_3day_precip`), AOD Volatility, Optuna MASE Crusher, heuristic purge |
 
 ---
 

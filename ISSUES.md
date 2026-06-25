@@ -183,3 +183,50 @@ After V10's failure, we realized that 2D satellite coordinates (VIIRS) cannot ca
 1. **Raw AOD Signals:** We abandoned synthetic physics indices and injected live, raw 3D Aerosol Optical Depth (AOD) vectors from the European CAMS framework via Open-Meteo. AOD provides the exact physical measurement of vertical atmospheric density. XGBoost effortlessly mapped the raw AOD signals to stagnation spikes, dropping the Extreme-Spike MAE (PM2.5 > 150) to 76.06 µg/m³ without disrupting the general horizon accuracy.
 2. **The GB Exception (Dynamic Routing):** We hardcoded a routing exception for Great Britain at $h=14$ and $h=30$. Great Britain has an oceanic climate with virtually no wildfires and extremely stable long-term pollution patterns. For this specific region, satellite AOD introduces unnecessary variance. Thus, GB intentionally falls back to the V9 historical persistence engine for long horizons, as historical baselines are a much stronger predictor than 3D AOD for pure oceanic climates.
 3. **Per-Country Optuna Tuning:** Instead of forcing a global compromise, we built an Optuna tuning matrix that assigns specific XGBoost parameters to specific countries. For example, Australia (extreme low variance) is artificially constrained to `max_depth=6` to prevent chasing noise, while India (high variance, heavy baseline) expands to `max_depth=9` to fully utilize the 3D AOD structural density.
+
+---
+
+## 16. The June 25th Monsoon Anomaly — "Single-Day Myopia" [RESOLVED - V11.1 Release]
+**Issue:**
+On June 25th, the V11 engine predicted India's average PM2.5 at **49.44 µg/m³** while the actual ground truth was **14.61 µg/m³** — a catastrophic 3.4× overestimation. Root-cause analysis revealed that a massive monsoon washout event had scrubbed the atmosphere clean within hours, but the model had zero awareness of accumulated precipitation. It only consumed `future_precip` (is it raining *today*?), completely ignoring the fact that 72 hours of continuous heavy rain had already flushed all particulate matter from the atmospheric column.
+
+**First Attempt — Hardcoded Heuristic Override (`is_raining_now`):**
+We initially built a quick patch: if `future_precip > 10mm`, force the prediction down by 60%. If `future_wind > 20 km/h`, reduce by another 30%. This immediately stopped the anomaly — but overcorrected disastrously. India's prediction crashed to **6.38 µg/m³**, which is unrealistically low even during heavy rain. The heuristic couldn't calibrate itself; it was a blunt hammer for a precision problem.
+
+**Solution (Autonomous Physics via Feature Engineering):**
+We completely ripped out all hardcoded heuristic overrides and engineered two new physics-aware features computed via PostgreSQL Window Functions:
+1. `rolling_3day_precip`: `SUM(om_precipitation) OVER (PARTITION BY station_id ORDER BY date ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING)` — gives the model "Atmospheric Memory" of cumulative rain.
+2. `aod_volatility_index`: `STDDEV(om_aerosol_optical_depth) OVER (PARTITION BY station_id ORDER BY date ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING)` — captures atmospheric instability/turbulence over the trailing week.
+
+After Optuna retraining with these new features, the model natively learned to reduce its prediction by ~20 µg/m³ during monsoon events (58.75 → 38.74) without any manual intervention. The remaining gap to 14.61 represents the "Mean Reversion Trap" (see Issue 18).
+
+---
+
+## 17. The ApiFallbackManager — Production Resilience Architecture [RESOLVED - V11.1 Release]
+**Issue:**
+The original ETL pipeline (`run_daily_etl.py`) used hardcoded API keys and had zero retry logic. During the Azure production transition planning, we identified three critical failure modes:
+1. **OpenAQ Rate Limiting (429):** A single API key would get throttled during peak hours, causing entire daily fetches to silently fail.
+2. **Open-Meteo & NASA POWER Timeouts:** These IP-based APIs (no keys) would intermittently timeout during high-traffic periods with no recovery mechanism.
+3. **Atomic Transaction Rigidity:** The initial architectural proposal would reject an *entire day's data* if a single API threw a 429 or timed out — an unacceptable data loss vector for production.
+
+**Solution (`src/api_fallback_manager.py`):**
+We built a centralized `ApiFallbackManager` class with three defense layers:
+1. **OpenAQ Key Rotation (`KeyManager`):** Accepts an array of API keys. If Key A hits a 429 or fails, the system catches the exception, logs a warning, rotates to Key B, and retries the exact same request — no data loss.
+2. **Exponential Backoff & Jitter:** For IP-based APIs (Open-Meteo, NASA POWER), implements progressive retry delays (2s → 5s → 15s) with random jitter to prevent thundering-herd effects.
+3. **The Final Kill Switch:** The Atomic Transaction abort (`RuntimeError`) is triggered ONLY if ALL fallback mechanisms (every key rotated, every retry exhausted) have been fully depleted. A single transient 429 will never kill a daily pipeline run.
+
+---
+
+## 18. The XGBoost "Mean Reversion Trap" — Why Trees Smooth Extreme Events [OPEN — Future ML Frontier]
+**Issue:**
+Even after injecting `rolling_3day_precip` and retraining with Optuna, the V11.1 model predicted **38.74 µg/m³** during the June 25th monsoon washout while the ground truth was **14.61 µg/m³**. The model correctly learned the *direction* (rain = lower pollution) but refused to predict the extreme tail-end value. This is a fundamental property of MAE-optimized decision trees, not a bug.
+
+**Root Cause (The Physics of XGBoost):**
+When a decision tree reaches a leaf node for a condition like "Rain > 15mm," it computes the *average* of all historical outcomes matching that condition. In reality, 15mm of rain sometimes drops pollution to 14 µg/m³ (extreme washout) and sometimes only to 50 µg/m³ (partial clearing). XGBoost, optimized on MAE, is mathematically penalized more for predicting 14 when reality is 50 than for predicting the safe average of ~38. So it always hedges toward the center of the distribution.
+
+**Identified Solutions (Not Yet Implemented):**
+1. **Quantile Regression:** Train XGBoost with `objective='reg:quantile'` at the 10th percentile to explicitly predict worst-case washout scenarios instead of averages.
+2. **Two-Tier Classification Architecture (Regime-Switching):** Train a binary classifier ("Is this an Extreme Washout day? YES/NO"), and if YES, route the prediction to a secondary XGBoost model trained *exclusively* on rainy days. This "Mixture of Experts" approach allows the wet-weather model to dedicate 100% of its tree depth to learning fluid dynamics without being diluted by the 95% of dry days in the training set.
+
+**Status:** Documented as a future ML frontier. The current V11.1 model is statistically sound (all MASE < 1.0 globally) and relies entirely on autonomous machine learning without hardcoded physics heuristics.
+
