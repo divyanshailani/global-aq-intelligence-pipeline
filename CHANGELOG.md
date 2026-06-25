@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [11.1.1] - The MASE Crusher (Autonomous Physics Retraining)
+
+### 🚀 Issues Tackled & System Upgrades
+- **The June 25th Monsoon Anomaly (Issue #16)**: India's V11 model predicted 49.44 µg/m³ while ground truth was 14.61 µg/m³ during a massive monsoon washout. Root-cause: the model had zero awareness of cumulative precipitation — it only looked at single-day `future_precip`.
+- **Hardcoded Heuristic Override (Failed Attempt)**: Built and deployed an `is_raining_now` physics gate that forcibly reduced predictions during rain events. It overcorrected India's prediction to 6.38 µg/m³ — proving hardcoded rules cannot calibrate fluid dynamics.
+- **Heuristic Purge**: Completely ripped out all hardcoded precipitation/wind override logic from `predict_pipeline.py`.
+
+### 🧠 Feature Engineering (Autonomous Physics)
+- **`rolling_3day_precip`**: PostgreSQL Window Function — `SUM(om_precipitation) OVER (... ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING)`. Gives XGBoost "Atmospheric Memory" of cumulative rain over 72 hours.
+- **`aod_volatility_index`**: PostgreSQL Window Function — `STDDEV(om_aerosol_optical_depth) OVER (... ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING)`. Captures atmospheric instability and turbulence across the trailing week.
+- **Matrix Rebuild**: Updated 1,627,674 rows in PostgreSQL entirely via native SQL Window Functions — zero Python loops, zero API calls.
+
+### 🏎️ Optuna MASE Crusher Sprint
+- Executed 20-trial Optuna hyperparameter optimization per country × horizon (14 total runs).
+- Objective function: minimize MASE (Mean Absolute Scaled Error) against the naive lag baseline.
+- Tuned parameters: `n_estimators`, `max_depth`, `learning_rate`, `subsample`, `colsample_bytree`, `min_child_weight`.
+- Total pipeline time: 707 seconds across all countries and horizons.
+
+### 📊 V11.1 vs V11 — Anomaly Backtest (June 25th India)
+| Metric | V11 (Old) | V11.1 (New) |
+| :--- | :--- | :--- |
+| Prediction (No Rain) | 49.44 µg/m³ | 58.75 µg/m³ |
+| Prediction (15mm Rain) | 49.44 µg/m³ (no rain awareness) | 38.74 µg/m³ (natively learned) |
+| Ground Truth | 14.61 µg/m³ | 14.61 µg/m³ |
+| Rain Sensitivity | ❌ None | ✅ -20.01 µg/m³ autonomous drop |
+
+### 🔮 Identified Future ML Frontier (Issue #18 — Not Implemented)
+- **The Mean Reversion Trap**: XGBoost with MAE optimization inherently hedges toward the average of all rain-day outcomes (~38) rather than predicting the extreme tail (14.61). Two advanced architectures identified for future work:
+  1. **Quantile Regression** (`reg:quantile` at 10th percentile)
+  2. **Two-Tier Regime-Switching** (Binary classifier → dedicated Wet-Weather XGBoost)
+
 ## [11.1.0] - Live Weather Injection & Database Healing
 
 ### 🚀 Issues Tackled & System Upgrades
@@ -9,6 +40,14 @@ All notable changes to this project will be documented in this file.
 - **The Inference Blindspot**: First-principles analysis revealed that the XGBoost model was completely starved of weather data during live inference. The bulk data collectors (`fetch_openmeteo_all.py`, `fetch_nasa_power.py`) were hardcoded to historical bounds (ending mid-June) and `run_daily_etl.py` ONLY synced PM2.5 sensor data. Without precipitation features, the tree defaulted to its historical no-rain baseline.
 - **Database Healing (Targeted Backfill)**: Engineered and deployed `scripts/backfill_recent_weather.py` and `scripts/backfill_recent_aod.py` to surgically fetch OpenMeteo weather and AOD data for the missing June 21-25 gap, directly patching the `daily_features` table without triggering the massive historical backfill logic.
 - **The "Hard Switch" Concept (is_raining_now)**: Validated a core architectural upgrade for the live pipeline: injecting a real-time binary flag (`is_raining_now = 1`) to explicitly override standard model paths and force the decision trees down the thermodynamic "Wet Scavenging" route instantly.
+
+## [11.0.1] - Azure Production Resilience (ApiFallbackManager)
+
+### 🚀 Issues Tackled & System Upgrades
+- **Production ETL Resilience (Issue #17)**: Built `src/api_fallback_manager.py` — a centralized API defense layer with OpenAQ key rotation, exponential backoff & jitter for IP-based APIs, and a Final Kill Switch that only aborts when ALL fallback mechanisms are depleted.
+- **Old Script Quarantine**: Moved all legacy hardcoded fetch scripts into `old_scripts/` directory.
+- **New Resilient Fetchers**: Created `scripts/fetch_daily_weather.py` and `scripts/fetch_daily_aod.py` — both import and use the `ApiFallbackManager`.
+- **Orchestrator Rewrite**: Updated `scripts/run_daily_etl.py` with Atomic Transaction wrapping via `try...except RuntimeError`.
 
 ## [11.0.0] - V11 3D Atmospheric Ensemble Active
 
