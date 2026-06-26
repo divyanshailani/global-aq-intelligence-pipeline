@@ -20,7 +20,6 @@ jobs:
       
       # API Keys
       OPENAQ_KEYS: ${{ secrets.OPENAQ_KEYS }}
-      # Add other API keys here if needed (e.g., VISUAL_CROSSING_KEY)
 
     steps:
       - name: 📥 Checkout Code
@@ -30,12 +29,50 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip' # Automatically caches pip dependencies to speed up runs
+          cache: 'pip'
 
       - name: 📦 Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: 🔍 Debug - Verify Secrets Are Loaded
+        run: |
+          echo "=== Checking environment variables ==="
+          if [ -z "$POSTGRES_HOST" ]; then echo "❌ POSTGRES_HOST is EMPTY"; else echo "✅ POSTGRES_HOST is set (length: ${#POSTGRES_HOST})"; fi
+          if [ -z "$POSTGRES_PORT" ]; then echo "❌ POSTGRES_PORT is EMPTY"; else echo "✅ POSTGRES_PORT is set (value: $POSTGRES_PORT)"; fi
+          if [ -z "$POSTGRES_USER" ]; then echo "❌ POSTGRES_USER is EMPTY"; else echo "✅ POSTGRES_USER is set (length: ${#POSTGRES_USER})"; fi
+          if [ -z "$POSTGRES_PASSWORD" ]; then echo "❌ POSTGRES_PASSWORD is EMPTY"; else echo "✅ POSTGRES_PASSWORD is set (length: ${#POSTGRES_PASSWORD})"; fi
+          if [ -z "$POSTGRES_DB" ]; then echo "❌ POSTGRES_DB is EMPTY"; else echo "✅ POSTGRES_DB is set (length: ${#POSTGRES_DB})"; fi
+          if [ -z "$OPENAQ_KEYS" ]; then echo "❌ OPENAQ_KEYS is EMPTY"; else echo "✅ OPENAQ_KEYS is set (length: ${#OPENAQ_KEYS})"; fi
+          echo "=== Quick DB connectivity test ==="
+          python -c "
+          import os
+          host = os.environ.get('POSTGRES_HOST', '').strip()
+          port = os.environ.get('POSTGRES_PORT', '').strip()
+          user = os.environ.get('POSTGRES_USER', '').strip()
+          db   = os.environ.get('POSTGRES_DB', '').strip()
+          print(f'Host repr: {repr(host)}')
+          print(f'Port repr: {repr(port)}')
+          print(f'User repr: {repr(user)}')
+          print(f'DB repr:   {repr(db)}')
+          print(f'Host ends with .postgres.database.azure.com: {host.endswith(\".postgres.database.azure.com\")}')
+          import psycopg2
+          try:
+              conn = psycopg2.connect(
+                  host=host, port=int(port) if port else 5432,
+                  user=user, password=os.environ.get('POSTGRES_PASSWORD','').strip(),
+                  dbname=db, connect_timeout=10,
+                  sslmode='require'
+              )
+              cur = conn.cursor()
+              cur.execute('SELECT COUNT(*) FROM raw_measurements')
+              print(f'✅ DB connected! raw_measurements rows: {cur.fetchone()[0]}')
+              conn.close()
+          except Exception as e:
+              print(f'❌ DB connection failed: {e}')
+              raise
+          "
 
       - name: 🌐 Step 1 - Fetch Latest OpenAQ & NASA POWER Data
         run: |
@@ -56,7 +93,7 @@ jobs:
           git clone https://${FRONTEND_PAT}@github.com/divyanshailani/global-aq-intelligence.git global-aq-intelligence
           
           # Go back to pipeline dir to run predictions
-          cd pow-eda-pipeline
+          cd global-aq-intelligence-pipeline
 
           echo "Running XGBoost v11 Models..."
           python scripts/predict_pipeline.py
