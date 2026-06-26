@@ -17,6 +17,7 @@ Phases:
 import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_values
+import warnings
 
 # ─── Domain-Knowledge Thresholds ──────────────────────────
 # Maximum physically realistic values for each parameter
@@ -184,7 +185,9 @@ def load_station_raw_data(conn, station_id):
         WHERE station_id = %s
         ORDER BY datetime_utc
     """
-    return pd.read_sql(sql, conn, params=(station_id,))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        return pd.read_sql(sql, conn, params=(station_id,))
 
 
 def insert_clean_data(conn, df):
