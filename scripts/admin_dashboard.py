@@ -313,17 +313,18 @@ async def run_predict(background_tasks: BackgroundTasks):
 def _run_predict():
     try:
         add_log("═══ STEP 2: RUN 30-DAY PREDICTIONS ═══")
-        result = subprocess.run(
-            [sys.executable, os.path.join(SCRIPTS_DIR, "predict_pipeline.py"),
-             "--skip-fetch"],
-            capture_output=True, text=True, timeout=600,
-            cwd=BASE_DIR,
+        process = subprocess.Popen(
+            [sys.executable, "-u", os.path.join(SCRIPTS_DIR, "predict_pipeline.py"), "--skip-fetch"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=BASE_DIR
         )
-        for line in result.stdout.strip().split("\n"):
-            if line.strip():
-                add_log(line.strip())
+        for line in iter(process.stdout.readline, ""):
+            line = line.strip()
+            if line:
+                add_log(f"  {line}")
+        process.stdout.close()
+        return_code = process.wait()
 
-        if result.returncode == 0:
+        if return_code == 0:
             add_log("✅ PREDICTIONS COMPLETE")
 
             # Copy to frontend repo
@@ -367,6 +368,12 @@ def _run_deploy():
     try:
         add_log("═══ STEP 3: DEPLOY TO VERCEL ═══")
         today = date.today().isoformat()
+        
+        if not os.path.exists(SITE_REPO):
+            add_log(f"⚠️ Frontend repo not found at: {SITE_REPO}")
+            add_log("To enable auto-deploy, clone the frontend repo to the VM and set FRONTEND_DATA_PATH in .env")
+            pipeline_state["result"] = "error"
+            return
 
         # Git add
         add_log("git add -A...")
@@ -386,20 +393,22 @@ def _run_deploy():
 
         # Git push
         add_log("git push origin main...")
-        result = subprocess.run(
+        process = subprocess.Popen(
             ["git", "push", "origin", "main"],
-            cwd=SITE_REPO, capture_output=True, text=True, timeout=60,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=SITE_REPO
         )
-        output = (result.stdout + result.stderr).strip()
-        for line in output.split("\n"):
-            if line.strip():
-                add_log(f"  {line.strip()}")
+        for line in iter(process.stdout.readline, ""):
+            line = line.strip()
+            if line:
+                add_log(f"  {line}")
+        process.stdout.close()
+        return_code = process.wait()
 
-        if result.returncode == 0:
+        if return_code == 0:
             add_log("✅ PUSHED — Vercel will auto-deploy in ~30s")
             pipeline_state["result"] = "success"
         else:
-            add_log(f"⚠️ Push may have failed. Check output above.")
+            add_log(f"⚠️ Push may have failed. Check output above. (Code: {return_code})")
             pipeline_state["result"] = "error"
     except Exception as e:
         add_log(f"❌ DEPLOY FAILED: {e}")
@@ -428,20 +437,22 @@ def _run_retrain():
         add_log("═══ STEP 4: RETRAIN MODELS ═══")
         add_log("Running retrain_pipeline.py (Continuous Retraining Loop with R² guard)...")
 
-        result = subprocess.run(
-            [sys.executable, os.path.join(SCRIPTS_DIR, "retrain_pipeline.py")],
-            capture_output=True, text=True, timeout=1200,
-            cwd=BASE_DIR,
+        process = subprocess.Popen(
+            [sys.executable, "-u", os.path.join(SCRIPTS_DIR, "retrain_pipeline.py")],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=BASE_DIR
         )
-        for line in result.stdout.strip().split("\n"):
-            if line.strip():
-                add_log(line.strip())
+        for line in iter(process.stdout.readline, ""):
+            line = line.strip()
+            if line:
+                add_log(f"  {line}")
+        process.stdout.close()
+        return_code = process.wait()
 
-        if result.returncode == 0:
-            add_log("✅ RETRAIN COMPLETE — new models saved to models/v9/")
+        if return_code == 0:
+            add_log("✅ RETRAIN COMPLETE — new models saved to models/v11/")
             pipeline_state["result"] = "success"
         else:
-            add_log(f"❌ Train error: {result.stderr[:500]}")
+            add_log(f"❌ Train error: Script exited with code {return_code}")
             pipeline_state["result"] = "error"
     except Exception as e:
         add_log(f"❌ RETRAIN FAILED: {e}")
