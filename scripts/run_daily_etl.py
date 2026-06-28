@@ -134,17 +134,21 @@ def main():
             base_backoff=2.0
         )
 
+        # Only fetch weather for RECENT missing rows (last N days).
+        # Older NULL-weather rows stay NULL — XGBoost hist handles NaN natively.
+        weather_lookback = args.recent_days + 1  # +1 buffer for timezone edge
+
         with conn.cursor() as cur:
-            # Query for rows missing weather data
             if station_ids is None:
                 cur.execute("""
                     SELECT DISTINCT df.station_id, df.date, s.latitude, s.longitude
                     FROM daily_features df
                     JOIN stations s ON df.station_id = s.id
-                    WHERE df.om_temperature IS NULL
-                       OR df.om_precipitation IS NULL
+                    WHERE (df.om_temperature IS NULL
+                       OR df.om_precipitation IS NULL)
+                      AND df.date >= NOW() - INTERVAL '%s days'
                     ORDER BY df.date DESC, df.station_id
-                """)
+                """, (weather_lookback,))
             else:
                 format_strings = ','.join(['%s'] * len(station_ids))
                 cur.execute(f"""
@@ -154,8 +158,9 @@ def main():
                     WHERE df.station_id IN ({format_strings})
                       AND (df.om_temperature IS NULL
                            OR df.om_precipitation IS NULL)
+                      AND df.date >= NOW() - INTERVAL '%s days'
                     ORDER BY df.date DESC, df.station_id
-                """, tuple(station_ids))
+                """, tuple(station_ids) + (weather_lookback,))
 
             missing_rows = cur.fetchall()
 
