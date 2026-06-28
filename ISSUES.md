@@ -342,3 +342,27 @@ During the initial V11 vs V12 evaluation, the script compared the models' multi-
 This severely penalized the model for successfully predicting the future, inflating MAE and causing massive MASE explosions (>2.0) globally.
 **Resolution:** 
 Rewrote the V12 evaluation logic (`evaluate_v12_only.py`) to correctly align the predicted `t+h` value against the true `t+h` actual. The Naive baseline for MASE was also corrected to evaluate predicting the current `t` value for `t+h`. Post-fix, V12 achieved MASE < 1.0 across all tested regions, proving its thermodynamic forecasting superiority.
+
+---
+
+## 28. V11 Metric Inflation — Cross-Validation on Corrupted Data [RESOLVED — V12 Release]
+**Issue:** 
+V11 metrics (e.g., IN 1d: MAE=9.76, Acc=74.58%) were cross-validation metrics trained on the local pre-production PostgreSQL database. This local DB suffered from AOD median-fill corruption, a dead `wind_direction` column hardcoded to 0.0, and future weather dependency at inference.
+**Resolution:** 
+The pipeline was transitioned to the V12 Challenger Engine, evaluated purely out-of-sample on the fixed Azure production DB. V11 metrics have been deprecated and should NEVER be compared directly to the honest V12 holdout metrics.
+
+---
+
+## 29. US Holdout Data Starvation — Only 53 Rows for h=30d [OPEN — Data Accumulation]
+**Issue:** 
+Due to data availability constraints, the US holdout period does not begin until March 21, 2026. After applying phase-shift cutoffs, US h=14d has only 168 evaluable rows, and h=30d has a mere 53 rows. These tiny sample sizes are statistically unreliable and trigger 🔴 flags during evaluation.
+**Resolution:** 
+Wait for more holdout data to accumulate organically, or manually backfill additional historical raw measurements into the Azure DB.
+
+---
+
+## 30. XGBoost Mean Reversion on Long-Horizon US Forecasts [OPEN — Architecture Frontier]
+**Issue:** 
+The 2×2 forecast grids reveal that long-horizon US models (h=14, h=30) suffer from a mean reversion trap. During true actual PM2.5 spikes of ~60 µg/m³, the XGBoost models hedge conservatively toward ~12 µg/m³. This is a fundamental mathematical property of MAE-optimized decision trees predicting the conditional mean, which naturally collapses tail events.
+**Resolution:** 
+This is identified as the next major ML architecture frontier. Proposed solutions include Quantile Regression (predicting the 90th percentile instead of the mean) or Two-Tier Regime-Switching (training separate models for clean vs. spike regimes).

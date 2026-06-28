@@ -5,14 +5,14 @@
 # Global AQ Intelligence — ML Pipeline
 
 [![Live Deployment](https://img.shields.io/badge/Live_Deployment-global--aq--intelligence.vercel.app-10B981?style=for-the-badge&logo=vercel)](https://global-aq-intelligence.vercel.app)
-> **Currently running the V11 3D Atmospheric Ensemble Router.**
+> **Currently running the V12 Challenger Pure Engine.**
 
-[📜 Read the full V11 Changelog & Architecture History here](CHANGELOG.md)
+[📜 Read the full V12 Changelog & Architecture History here](CHANGELOG.md)
 
 ![Dashboard Screenshot](https://raw.githubusercontent.com/divyanshailani/global-aq-intelligence-web/main/public/images/ui_dashboard.png)
 > End-to-end PM2.5 forecasting engine for 4 countries. Autonomous daily pipeline: fetch → engineer → predict → export → sync.
 
-**Stack:** Python · PostgreSQL · scikit-learn GBR · NASA POWER · Open-Meteo · FastAPI
+**Stack:** Python · PostgreSQL · Parquet · XGBoost · Modal Serverless Grid · FastAPI
 
 **Frontend:** [global-aq-intelligence-web](https://github.com/divyanshailani/global-aq-intelligence-web)
 
@@ -38,27 +38,92 @@ This fetches live sensor data, generates 30-day forecasts per station, exports s
 
 ```
 OpenAQ API ──┐
-NASA POWER ──┼──▶ PostgreSQL ──▶ Feature Engineering ──▶ V11 Router ──▶ JSON Export ──▶ Next.js
-Open-Meteo ──┘                   (lag/rolling/delta)     (XGBoost)     (site_data/)    (auto-sync)
+NASA POWER ──┼──▶ PostgreSQL ──▶ Parquet ──▶ Modal Grid ──▶ V12 XGBoost ──▶ JSON Export ──▶ Next.js
+Open-Meteo ──┘                                                               (site_data/)    (auto-sync)
 ```
 
-### Model Architecture: V11 3D Atmospheric Ensemble Router
+### Model Architecture: V12 Challenger Pure Engine
 
-**V11 Global Unified Architecture (Native XGBoost):**
-We migrated from a single model to a dynamic ensemble router. The core mathematical foundation builds on the V11 XGBoost engine with several major enhancements:
-- **Dynamic Routing**: Great Britain relies on the V9 physics-backed persistence model for long-term horizons, while all other regions/horizons use the V11 engine.
-- **Delta Target Transformation ($\Delta Y$)**: The engine predicts 'Velocity' ($\Delta Y = Y_t - Y_{t-1}$) to force the model to explicitly correct the naive baseline, unlocking significant long-term stability.
-- **SUOMI VIIRS Spatial 'Blast Radius' Engine**: Uses the Haversine formula to bridge satellite fire coordinates with ground stations, creating a 100km `fire_density` and `fire_radiative_power` dynamic feature set.
-- **Fading Memory (EMA)**: An Exponential Moving Average (EMA) gives higher weight to recent micro-fluctuations, crushing the 1-day horizon underfitting problem.
-- **3D Atmospheric Depth (AOD)**: Live injection of Aerosol Optical Depth from Open-Meteo satellite arrays to physically map vertical pollution density.
+**V12 Global Unified Architecture (Native XGBoost):**
+We migrated to the V12 Challenger Pure Engine, marking the first honestly-evaluated model in the pipeline's history. The architecture features:
+- **Direct Multi-Horizon Forecasting**: Strictly independent models for 1, 7, 14, and 30-day horizons.
+- **Delta Target Transformation ($\Delta Y$)**: The engine predicts 'Velocity' ($\Delta Y = Y_t - Y_{t-1}$) to force explicit correction of the naive baseline.
+- **Strict Anti-Leakage (Nuclear Drop)**: A 3-layer protection scheme (`target_` prefix check, blacklist, empty assertion) ensures deep memory isolation, preventing target variables from leaking into future predictions.
+- **Phase-Shift Target Alignment**: The engine accurately predicts from day $t$ and strictly evaluates against the physical ground truth at $t+h$.
+- **Zero Imputation Architecture**: XGBoost's `hist` tree method handles NaNs natively, preserving the true physical signal of cloud cover without corrupting data with median-fills.
+- **Thermodynamic Phase-Shift**: Unlike V11, V12 maps *today's* atmospheric state directly to PM2.5 at $t+h$ without requiring future weather forecasts at inference time.
 
 ---
 
-## Performance (V11 Geospatial Ensemble)
+## Performance (V12 Challenger Pure Engine)
 
-### V11 → V11.1: The MASE Crusher Upgrade
+### The Great Data Audit & V11 Deprecation
 
-The V11.1 engine represents a fundamental shift from "Single-Day Myopia" to **Autonomous Atmospheric Physics**. Instead of only looking at today's weather, the model now understands *cumulative* weather patterns over 72 hours and atmospheric instability over a trailing week.
+> [!WARNING]
+> **V11 Metrics Deprecated:** The previous V11 metrics (e.g., India 1d MAE=9.76, Acc=74.58%) were **cross-validation metrics** trained on a corrupted local database. The local DB suffered from AOD median-fill corruption, a dead `wind_direction` column, and improper phase-shift alignment. **V12 holdout metrics are pure out-of-sample and pessimistically honest. Do NOT compare them directly to V11.**
+
+### V12 Pure Holdout Metrics (Global)
+*Evaluated using `evaluate_v12_pure.py` on the fixed Azure production DB with Phase-Shift Alignment and Honest MASE (Persistence Baseline).*
+
+| Country | Horizon | MAE | NMAE | MASE | Accuracy (%) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **GB** | 1 | 0.81 | 0.1417 | 0.3524 | **85.8%** |
+| **GB** | 7 | 1.15 | 0.1623 | 0.3150 | **83.8%** |
+| **GB** | 14 | 1.48 | 0.1146 | **0.1706** | **88.5%** |
+| **GB** | 30 | 1.43 | 0.1180 | **0.1743** | **88.2%** |
+| **AU** | 1 | 3.25 | 0.5108 | 0.7061 | **48.9%** |
+| **AU** | 7 | 4.39 | 0.5582 | 0.5369 | **44.2%** |
+| **AU** | 14 | 4.60 | 0.5307 | 0.5694 | **46.9%** |
+| **AU** | 30 | 4.19 | 0.5507 | 0.6924 | **44.9%** |
+| **IN** | 1 | 34.61 | 0.5756 | 0.9991 | **42.4%** |
+| **IN** | 7 | 25.86 | 0.5015 | 0.7011 | **49.9%** |
+| **IN** | 14 | 26.69 | 0.5101 | 0.5599 | **49.0%** |
+| **IN** | 30 | 27.14 | 0.5489 | **0.5185** | **45.1%** |
+| **US** | 1 | 6.09 | 0.5658 | 0.9255 | **43.4%** |
+| **US** | 7 | 7.37 | 0.6127 | 0.9022 | **38.7%** |
+| **US** | 14 | 8.81 | 0.5529 | 0.9082 | **44.7%** | 🔴 *Low sample size (168)*
+| **US** | 30 | 9.56 | 0.4659 | 0.9416 | **53.4%** | 🔴 *Low sample size (53)*
+
+**Key Takeaways:**
+- **16/16 Models Beat Persistence**: All 16 V12 models achieved MASE < 1.0.
+- **GB Dominance**: Great Britain demonstrated exceptional stability with MASE 0.17 at h=14 and h=30 (83% better than persistence) and high Accuracy (~88%).
+- **IN Resilience**: Despite a massive 63.5% AOD null rate (monsoon blinding), India achieved MASE 0.5185 at h=30.
+- **Error Decay Reality**: The error decay chart shows GB stable at ~1 µg/m³ MAE across all horizons, AU stable around ~4, US monotonically increasing from 6.1 to 9.6, and IN decreasing from 34.6 to 27.1 due to the monsoon transition easing volatility.
+
+### Forecast Visualizations
+
+<details>
+<summary><b>View Error Decay & Spike Capture (Click to expand)</b></summary>
+
+#### Global Error Decay (MAE vs Horizon)
+![Error Decay](plots/v12_pure_eval/error_decay.png)
+
+#### Spike Capture Overlay (India Station 693)
+![Spike Overlay](plots/v12_pure_eval/overlay_graph.png)
+
+</details>
+
+<details open>
+<summary><b>View 2×2 Forecast Grids</b></summary>
+
+#### United States (Station 2594) - Mean Reversion Trap Visible
+![US Forecast Grid](plots/v12_pure_eval/forecast_grid_US.png)
+
+#### Great Britain (Station 21919) - Exceptional Tracking
+![GB Forecast Grid](plots/v12_pure_eval/forecast_grid_GB.png)
+
+#### India (Station 449)
+![IN Forecast Grid](plots/v12_pure_eval/forecast_grid_IN.png)
+
+#### Australia (Station 18694)
+![AU Forecast Grid](plots/v12_pure_eval/forecast_grid_AU.png)
+
+</details>
+
+<details>
+<summary><b>Legacy V11 Documentation & Plots</b></summary>
+
+> **Note:** The following charts reflect the deprecated V11 engine. They are preserved for historical tracking of the "Atmospheric Memory" architecture shift.
 
 #### V11 (Old — Before Physics Memory)
 ![V11 Old Performance](./plots/forecast_horizons_v11_old.png)
@@ -66,41 +131,7 @@ The V11.1 engine represents a fundamental shift from "Single-Day Myopia" to **Au
 #### V11.1 (New — Autonomous Atmospheric Physics)
 ![V11.1 New Performance](./plots/forecast_horizons_v11_new.png)
 
-#### What Changed (The Physics Upgrade)
-
-| Feature | V11 (Old) | V11.1 (New) |
-| :--- | :--- | :--- |
-| Rain Awareness | Single-day `future_precip` only | `rolling_3day_precip` — 72hr cumulative rain memory |
-| Atmospheric Stability | None | `aod_volatility_index` — 7-day AOD standard deviation |
-| Heuristic Overrides | `is_raining_now` hardcoded rules | ❌ Completely purged — model learns autonomously |
-| Optimization Target | MASE (basic) | MASE (20-trial Optuna per country × horizon) |
-| Matrix Rebuild | N/A | 1,627,674 rows via PostgreSQL Window Functions |
-
-**The Key Insight:** The V11 model had zero "Atmospheric Memory." It didn't know that 72 hours of continuous monsoon rain had already flushed all particulate matter from the atmosphere. During the June 25th India anomaly, V11 predicted 49.44 µg/m³ while the ground truth was 14.61 µg/m³. After the V11.1 physics upgrade, the model **natively** learned to drop its prediction by ~20 µg/m³ during heavy rain events (58.75 → 38.74) without any hardcoded rules.
-
-> **💡 The Mean Reversion Trap (Issue #18)**
-> The remaining gap from 38.74 to 14.61 µg/m³ is a fundamental property of MAE-optimized decision trees — they hedge toward the average of all rain-day outcomes rather than predicting extreme tail events. Two future ML architectures are identified: **Quantile Regression** and **Two-Tier Regime-Switching** (see [`ISSUES.md`](./ISSUES.md#18)).
-
-#### V11.1 Optuna-Optimized Metrics (Global)
-
-| Country | Horizon | MAE | NMAE | MASE | Accuracy (%) |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **IN** | 1 | 9.76 | 0.2542 | 0.8900 | **74.58%** |
-| **IN** | 7 | 15.72 | 0.4046 | 0.6800 | **59.54%** |
-| **IN** | 14 | 16.89 | 0.4364 | 0.6000 | **56.36%** |
-| **IN** | 30 | 15.60 | 0.4106 | 0.5100 | **58.94%** |
-| **GB** | 1 | 2.15 | 0.3369 | 0.8200 | **66.31%** |
-| **GB** | 7 | 2.41 | 0.3798 | 0.5700 | **62.02%** |
-| **GB** | 14 | — | — | — | V9 Fallback |
-| **GB** | 30 | — | — | — | V9 Fallback |
-| **US** | 1 | 2.21 | 0.3025 | 0.8300 | **69.75%** |
-| **US** | 7 | 2.88 | 0.3934 | 0.7100 | **60.66%** |
-| **US** | 14 | 2.98 | 0.4072 | 0.7000 | **59.28%** |
-| **US** | 30 | 3.02 | 0.4125 | 0.7100 | **58.75%** |
-| **AU** | 1 | 1.83 | 0.3025 | 0.7800 | **69.75%** |
-| **AU** | 7 | 2.14 | 0.3540 | 0.6600 | **64.60%** |
-| **AU** | 14 | 2.10 | 0.3465 | 0.6500 | **65.35%** |
-| **AU** | 30 | 2.16 | 0.3571 | 0.6600 | **64.29%** |
+</details>
 
 ---
 
@@ -125,9 +156,8 @@ The V11.1 engine represents a fundamental shift from "Single-Day Myopia" to **Au
 │   ├── cleaning.py                # Outlier removal + null handling
 │   └── aggregations.py            # Station-level daily aggregation
 ├── models/
-│   ├── v5/                        # Legacy (chained) — kept as baseline
-│   ├── v6/                        # Direct horizon — no future weather
-│   └── v7/                        # Production — direct + future weather
+│   ├── v12/                       # Production — Parquet Modal Grid (Challenger Engine)
+│   └── v5_to_v11/                 # Deprecated legacy models
 ├── sql/
 │   └── schema.sql                 # Schema + v6 migration (ADD COLUMN IF NOT EXISTS)
 ├── data/
@@ -150,12 +180,12 @@ All features are strictly backward-looking. No same-day or future values in trai
 |-------|----------|----------|
 | Short lags | lag_1, lag_2, lag_3, lag_7 | Recent pollution memory |
 | Long lags | lag_14, lag_21, lag_30 | Monthly context, seasonal baseline |
-| Rolling | roll_3/7/14/30_mean, roll_3/14_std | Trend + volatility |
-| Momentum | pm25_delta_1, pm25_delta_7 | Rising vs falling signal |
-| Weather (hist) | temperature, humidity, wind_speed (NASA POWER) | Dispersion conditions |
-| Weather (future) | future_temp, future_wind, future_precip (Open-Meteo) | V7 thermodynamics |
-| Pollutants | no2, co, o3, so2 (lagged) | Chemical co-occurrence |
-| Fire | fire_count (NASA FIRMS) | Wildfire contribution |
+| Rolling | roll_3_mean, roll_7_mean, roll_14_mean, roll_30_mean | Trend |
+| Volatility | roll_3_std, roll_14_std | Atmospheric instability |
+| Weather | om_temperature, om_wind_speed, om_precipitation | Dispersion conditions |
+| Thermodynamic | rolling_3day_precip | 72hr cumulative rain washout memory |
+| Atmospheric 3D | om_aerosol_optical_depth, aod_volatility_index | Vertical pollution density & stability |
+| Geography | latitude, longitude | Spatial anchor |
 | Calendar | month, day_of_week, day_of_year, is_weekend | Seasonal + traffic cycles |
 
 ---
@@ -205,6 +235,7 @@ Output JSONs are written to `data/site_data/` and automatically synced to `../gl
 | v9.4 | Geospatial Ensemble | Delta Target Transformation, VIIRS Spatial Blast Radius, EMA Fading Memory |
 | v11 | 3D Atmospheric Ensemble | 3D Aerosol Optical Depth (AOD) via Open-Meteo Satellite Sync |
 | v11.1 | Autonomous Physics Engine | Atmospheric Memory (`rolling_3day_precip`), AOD Volatility, Optuna MASE Crusher, heuristic purge |
+| v12 | Challenger Pure Engine | Azure Parquet lineage, Modal Serverless Grid, Nuclear Drop, Phase-Shift Evaluation, Zero Imputation |
 
 ---
 
@@ -224,6 +255,16 @@ The following issues were identified during a full Azure DB audit (2026-06-27) a
 | [Issue 25](./ISSUES.md#25-legacy-schema-collision-v11-blindness-resolved) | Legacy Schema Collision (V11 Blindness) | ✅ Resolved | V11 evaluation deprecated |
 | [Issue 26](./ISSUES.md#26-the-target-cascade-leakage-bug-in-v12-training-resolved) | Target Cascade Leakage Bug in V12 Training | ✅ Resolved | Deep isolated dataframe per horizon |
 | [Issue 27](./ISSUES.md#27-phase-shift-target-alignment-evaluation-bug-resolved) | Phase-Shift Evaluation Target Bug | ✅ Resolved | Target phase alignment corrected |
+| [Issue 28](./ISSUES.md#28-v11-metric-inflation--cross-validation-on-corrupted-data-resolved--v12-release) | V11 Metric Inflation (Corrupted Local DB) | ✅ Resolved | V12 pure holdout metrics adopted |
+| [Issue 29](./ISSUES.md#29-us-holdout-data-starvation--only-53-rows-for-h30d-open--data-accumulation) | US Holdout Data Starvation (h=30d) | ⏳ Waiting | Data organically accumulating |
+| [Issue 30](./ISSUES.md#30-xgboost-mean-reversion-on-long-horizon-us-forecasts-open--architecture-frontier) | XGBoost Mean Reversion Trap (US Long Horizons) | 🚀 Roadmap | Next-gen ML architecture needed |
+
+### 🚀 Future Roadmap
+
+- **Quantile Regression / Regime-Switching**: Addressing the US mean reversion trap where MAE-optimized decision trees collapse extreme tail events (60 µg/m³) into averages (~12 µg/m³).
+- **Data Accumulation**: Maturing the US holdout dataset to establish statistical significance for h=14d and h=30d horizons.
+- **Non-AOD Proxies**: Investigating alternative atmospheric proxies for India to mitigate the 63.5% AOD null rate caused by monsoon cloud cover.
+- **Automated Re-training**: Establishing a CI/CD cadence for Parquet re-export and Modal grid re-training to prevent model drift.
 
 ### ⚡ Global Grid Engine Specifications
 All V12 (Challenger) models undergo extensive hyperparameter sweeps (150 Optuna trials × 5-Fold Time-Series CV) across 1.4 million rows.
