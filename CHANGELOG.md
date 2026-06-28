@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [12.0.0] - V12 Challenger Pure Engine & Parquet Migration
+
+### 🚀 The Great Data Audit & Modal Serverless Grid
+- **The Great Data Audit**: Compared Azure production DB vs Local DB health. Discovered 33% AOD null rate is a physics constraint (cloud cover), but 63.5% for India. Exposed `wind_direction` as a dead column (95% NULL).
+- **Parquet Migration**: Built `export_azure_to_parquet.py` to dump `daily_features_full.parquet` (1.63M rows × 32 cols, Snappy-compressed). This bridges the Azure DB to our Modal compute cluster.
+- **Modal Serverless Grid Engine**: Deployed distributed Optuna hyperparameter sweeps (150 trials × 5-Fold TSCV) across 32-core Intel Xeon nodes, completing global tuning in a fraction of the time.
+
+### 🧠 The Challenger Pure Engine (`evaluate_v12_pure.py`)
+- **Strict Anti-Leakage (Nuclear Drop)**: Enforced a 3-layer protection scheme (`target_` prefix check, blacklist, empty assertion) to ensure deep memory isolation between horizons.
+- **Phase-Shift Target Alignment**: Fixed the V11 evaluation bug. The V12 engine accurately predicts from day $t$ and strictly compares against the physical ground truth at $t+h$.
+- **Honest MASE Baseline**: V11 relied on a flawed cross-validation metric. V12 calculates pure out-of-sample holdout MASE against a persistence baseline (the actual PM2.5 value exactly at day $t$).
+- **Zero Imputation Architecture**: Purged the corrupt AOD median-fill logic. The V12 engine leverages XGBoost's `hist` tree method to handle NaNs natively, preserving the true physical signal of cloud cover.
+
+### 📊 Performance Truth & V11 Deprecation
+- **V11 Metrics Deprecated**: The V11 cross-validation metrics (e.g., India 1d MAE=9.76, Acc=74.58%) were optimistically biased from the corrupted local DB. They have been officially purged from the pipeline benchmark.
+- **16/16 Models Beat Persistence**: All 16 V12 models achieved MASE < 1.0 on pure out-of-sample holdout data.
+- **GB Dominance**: Great Britain demonstrated exceptional stability with MASE 0.17 at $h=14$ and $h=30$ (83% better than persistence) and high Accuracy (~88%).
+- **US Mean Reversion Trap**: Discovered that long-horizon (14d/30d) US models suffer from a mean reversion trap, frequently hedging toward ~12 µg/m³ during true spikes of 60 µg/m³.
+
 ## [11.1.3] - Multi-VM Parallel Backfill & DB Cleanup (2026-06-27)
 
 ### 🚀 Multi-VM Parallel AOD Backfill
