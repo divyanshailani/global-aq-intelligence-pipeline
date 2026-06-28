@@ -299,5 +299,5 @@ For the full engineering history — data leakage discoveries, NASA POWER migrat
 ---
 
 ### License & Copyright
-© 2026 Divyansh Ailani. 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details. Note that production database credentials and live cloud environments are excluded and kept private.
+© 2026 Divyansh Ailani. All Rights Reserved.
+This project is proprietary. You are free to clone, run, and modify this pipeline for personal evaluation or educational use only. Commercial use, distribution, or reproduction without explicit permission is strictly prohibited. Note that production database credentials and live cloud environments are excluded and kept private.
