@@ -42,6 +42,22 @@ Thumbs.db
 Icon?
 scripts/.checkpoints/
 logs/
+site_data/
+scratch/
+query_db.py
+test_query.py
+scripts/node_modules/
+node_modules/
+.vercel/
+*.dump
+*.backup
+*.sql.gz
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+*_rsa
 
 # Secrets
 .env

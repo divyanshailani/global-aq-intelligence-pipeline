@@ -21,9 +21,12 @@ echo "========================================" >> "$LOG_FILE"
 
 cd "$PROJECT_DIR"
 
-# Load secrets from .env
+# Load secrets from .env without xargs, so special characters in passwords survive.
 if [ -f "$PROJECT_DIR/.env" ]; then
-    export $(grep -v '^#' "$PROJECT_DIR/.env" | xargs)
+    set -a
+    # shellcheck disable=SC1091
+    source "$PROJECT_DIR/.env"
+    set +a
 fi
 
 # Run daily collection (last 7 days, all countries)

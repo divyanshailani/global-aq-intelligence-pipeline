@@ -1,16 +1,25 @@
 import time
+import os
 import pandas as pd
 import requests
 import psycopg2
 from psycopg2.extras import execute_values
 
+
+def require_env(name: str) -> str:
+    value = os.getenv(name, "").strip()
+    if not value:
+        raise RuntimeError(f"{name} is required. Load it from .env or your shell.")
+    return value
+
 def patch_weather_batch():
     conn = psycopg2.connect(
-        host='globalaqiserver.postgres.database.azure.com',
-        user='postgresadmin',
-        password='[REDACTED]',
-        dbname='indiaaq',
-        sslmode='require',
+        host=require_env("POSTGRES_HOST"),
+        user=require_env("POSTGRES_USER"),
+        password=require_env("POSTGRES_PASSWORD"),
+        dbname=require_env("POSTGRES_DB"),
+        port=int(os.getenv("POSTGRES_PORT", "5432")),
+        sslmode=os.getenv("POSTGRES_SSLMODE", "require"),
         connect_timeout=15
     )
     

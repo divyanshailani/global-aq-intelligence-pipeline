@@ -6,29 +6,36 @@
 # into your new Azure PostgreSQL Flexible Server instance.
 # ==============================================================================
 
-# Load environment variables from .env securely
+# Load environment variables from .env without printing or xargs-mangling secrets.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 ENV_FILE="${SCRIPT_DIR}/../.env"
 if [ -f "$ENV_FILE" ]; then
-    export $(grep -v '^#' "$ENV_FILE" | xargs)
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
 else
     echo "❌ Error: .env file not found at $ENV_FILE"
     exit 1
 fi
 
 # --- Local DB Credentials ---
-LOCAL_HOST="localhost"
-LOCAL_PORT="5432"
-LOCAL_USER="postgres"
-LOCAL_DB="indiaaq"
-LOCAL_PASSWORD="8765"
+LOCAL_HOST="${LOCAL_POSTGRES_HOST:-localhost}"
+LOCAL_PORT="${LOCAL_POSTGRES_PORT:-5432}"
+LOCAL_USER="${LOCAL_POSTGRES_USER:-postgres}"
+LOCAL_DB="${LOCAL_POSTGRES_DB:-indiaaq}"
+: "${LOCAL_POSTGRES_PASSWORD:?Set LOCAL_POSTGRES_PASSWORD in .env before migration}"
+LOCAL_PASSWORD="$LOCAL_POSTGRES_PASSWORD"
 
 # --- Azure DB Credentials ---
-AZURE_HOST="globalaqiserver.postgres.database.azure.com"
-AZURE_PORT="5432"
-AZURE_USER="postgresadmin"
-AZURE_PASSWORD="[REDACTED]"
-AZURE_DB="indiaaq"
+: "${AZURE_POSTGRES_HOST:?Set AZURE_POSTGRES_HOST in .env before migration}"
+: "${AZURE_POSTGRES_USER:?Set AZURE_POSTGRES_USER in .env before migration}"
+: "${AZURE_POSTGRES_PASSWORD:?Set AZURE_POSTGRES_PASSWORD in .env before migration}"
+AZURE_HOST="$AZURE_POSTGRES_HOST"
+AZURE_PORT="${AZURE_POSTGRES_PORT:-5432}"
+AZURE_USER="$AZURE_POSTGRES_USER"
+AZURE_PASSWORD="$AZURE_POSTGRES_PASSWORD"
+AZURE_DB="${AZURE_POSTGRES_DB:-indiaaq}"
 
 echo "============================================================"
 echo "🚀 Starting Global AQI Database Migration to Azure"
@@ -48,13 +55,14 @@ echo "Depending on your internet upload speed, transferring 1.6M rows may take 5
 
 # The --clean flag drops tables on the target before recreating them
 # We pass PGPASSWORD inline so they don't overwrite each other in the shell
-LOCAL_DUMP_CMD="PGPASSWORD='${LOCAL_PASSWORD}' pg_dump -h ${LOCAL_HOST} -p ${LOCAL_PORT} -U ${LOCAL_USER} -d ${LOCAL_DB} --clean --if-exists --no-owner --no-privileges"
-AZURE_RESTORE_CMD="PGPASSWORD='${AZURE_PASSWORD}' psql -h ${AZURE_HOST} -p ${AZURE_PORT} -U ${AZURE_USER} -d ${AZURE_DB}"
+set -o pipefail
+PGPASSWORD="${LOCAL_PASSWORD}" pg_dump \
+    -h "${LOCAL_HOST}" -p "${LOCAL_PORT}" -U "${LOCAL_USER}" -d "${LOCAL_DB}" \
+    --clean --if-exists --no-owner --no-privileges \
+| PGPASSWORD="${AZURE_PASSWORD}" psql \
+    -h "${AZURE_HOST}" -p "${AZURE_PORT}" -U "${AZURE_USER}" -d "${AZURE_DB}"
 
-# Execute the pipe
-eval "${LOCAL_DUMP_CMD} | ${AZURE_RESTORE_CMD}"
-
-if [ ${PIPESTATUS[0]} -eq 0 ] && [ ${PIPESTATUS[1]} -eq 0 ]; then
+if [ $? -eq 0 ]; then
     echo "✅ Migration Complete!"
     echo "Your local database has been successfully mirrored to Azure."
 else

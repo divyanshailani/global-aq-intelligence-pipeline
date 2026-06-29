@@ -35,15 +35,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 🔍 Debug - Verify Secrets Are Loaded
+      - name: 🔍 Validate required secrets
         run: |
-          echo "=== Checking environment variables ==="
-          if [ -z "$POSTGRES_HOST" ]; then echo "❌ POSTGRES_HOST is EMPTY"; else echo "✅ POSTGRES_HOST is set (length: ${#POSTGRES_HOST})"; fi
-          if [ -z "$POSTGRES_PORT" ]; then echo "❌ POSTGRES_PORT is EMPTY"; else echo "✅ POSTGRES_PORT is set (value: $POSTGRES_PORT)"; fi
-          if [ -z "$POSTGRES_USER" ]; then echo "❌ POSTGRES_USER is EMPTY"; else echo "✅ POSTGRES_USER is set (length: ${#POSTGRES_USER})"; fi
-          if [ -z "$POSTGRES_PASSWORD" ]; then echo "❌ POSTGRES_PASSWORD is EMPTY"; else echo "✅ POSTGRES_PASSWORD is set (length: ${#POSTGRES_PASSWORD})"; fi
-          if [ -z "$POSTGRES_DB" ]; then echo "❌ POSTGRES_DB is EMPTY"; else echo "✅ POSTGRES_DB is set (length: ${#POSTGRES_DB})"; fi
-          if [ -z "$OPENAQ_KEYS" ]; then echo "❌ OPENAQ_KEYS is EMPTY"; else echo "✅ OPENAQ_KEYS is set (length: ${#OPENAQ_KEYS})"; fi
+          required=(POSTGRES_HOST POSTGRES_PORT POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB OPENAQ_KEYS)
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              echo "❌ $name is EMPTY"
+              exit 1
+            fi
+            echo "✅ $name is set"
+          done
           echo "=== Quick DB connectivity test ==="
           python -c "
           import os
@@ -51,11 +52,6 @@ jobs:
           port = os.environ.get('POSTGRES_PORT', '').strip()
           user = os.environ.get('POSTGRES_USER', '').strip()
           db   = os.environ.get('POSTGRES_DB', '').strip()
-          print(f'Host repr: {repr(host)}')
-          print(f'Port repr: {repr(port)}')
-          print(f'User repr: {repr(user)}')
-          print(f'DB repr:   {repr(db)}')
-          print(f'Host ends with .postgres.database.azure.com: {host.endswith(\".postgres.database.azure.com\")}')
           import psycopg2
           try:
               conn = psycopg2.connect(
@@ -65,20 +61,21 @@ jobs:
                   sslmode='require'
               )
               cur = conn.cursor()
-              cur.execute('SELECT COUNT(*) FROM raw_measurements')
-              print(f'✅ DB connected! raw_measurements rows: {cur.fetchone()[0]}')
+              cur.execute('SELECT 1')
+              cur.fetchone()
+              print('✅ DB connected')
               conn.close()
           except Exception as e:
-              print(f'❌ DB connection failed: {e}')
+              print('❌ DB connection failed')
               raise
           # Verify OPENAQ keys are clean
           import re
           raw = os.environ.get('OPENAQ_KEYS', '')
           normalized = re.sub(r'[\r\n]+', ',', raw)
           keys = [k.strip() for k in normalized.split(',') if k.strip()]
-          print(f'🔑 OPENAQ_KEYS: {len(keys)} keys found (raw length: {len(raw)})')
+          print(f'🔑 OPENAQ_KEYS: {len(keys)} keys found')
           for i, k in enumerate(keys):
-              print(f'  Key {i+1}: length={len(k)}, has_newline={chr(10) in k}, has_cr={chr(13) in k}')
+              print(f'  Key {i+1}: format_ok={bool(k)}')
           "
 
       - name: 🌐 Step 1 - Fetch Latest OpenAQ & NASA POWER Data
@@ -97,7 +94,7 @@ jobs:
         run: |
           echo "Cloning frontend repo to allow prediction sync..."
           cd ..
-          git clone https://${FRONTEND_PAT}@github.com/divyanshailani/global-aq-intelligence-web.git global-aq-intelligence-web
+          git clone https://github.com/divyanshailani/global-aq-intelligence-web.git global-aq-intelligence-web
           
           # Go back to pipeline dir to run predictions
           cd global-aq-intelligence-pipeline
@@ -112,6 +109,7 @@ jobs:
           cd ../global-aq-intelligence-web
           git config user.name "Global AQI Bot"
           git config user.email "bot@globalaqi.com"
+          git remote set-url origin "https://x-access-token:${FRONTEND_PAT}@github.com/divyanshailani/global-aq-intelligence-web.git"
           git add public/data/
           git commit -m "auto: Daily V12 ONNX Predictions Update 🚀" || echo "No changes to commit"
           git push
