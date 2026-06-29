@@ -17,6 +17,12 @@ import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings('ignore')
 
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from src.config import DB_CONFIG
+
 
 # Load model
 model = joblib.load('models/gb_pm25_v4_memory.pkl')
@@ -25,10 +31,7 @@ print(f"Model loaded: {len(features)} features")
 
 
 # Load data
-conn = psycopg2.connect(
-    host='localhost', dbname='indiaaq',
-    user='postgres', password='8765'
-)
+conn = psycopg2.connect(**DB_CONFIG)
 
 df = pd.read_sql("""
     SELECT d.date, d.station_id, d.value as pm25,

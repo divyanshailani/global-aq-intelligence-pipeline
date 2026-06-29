@@ -144,22 +144,36 @@ class TestConfig:
         from src import config
         importlib.reload(config)
         assert config.DB_CONFIG["password"] == "test_password_12345"
-        # Restore
-        os.environ["POSTGRES_PASSWORD"] = "8765"
+        # Restore to a non-secret placeholder so tests never carry real-looking creds.
+        os.environ["POSTGRES_PASSWORD"] = "test_password_restored"
         importlib.reload(config)
 
     def test_no_hardcoded_creds_in_scripts(self):
-        """No script should contain hardcoded '8765' except src/config.py."""
-        scripts_dir = os.path.join(PROJECT_ROOT, "scripts")
+        """Tracked code/docs should not carry hardcoded DB passwords or infra IDs."""
+        roots = ["scripts", "api", "src", "notebooks", ".github"]
+        forbidden = [
+            r"8765@@@",
+            r"password=['\"]8765['\"]",
+            r"POSTGRES_PASSWORD.*8765",
+            r"globalaqiserver\.postgres\.database\.azure\.com",
+            r"4\.213\.226\.19",
+        ]
         violations = []
-        for py_file in glob.glob(os.path.join(scripts_dir, "*.py")):
-            with open(py_file) as f:
-                content = f.read()
-            if '"8765"' in content or "'8765'" in content:
-                violations.append(os.path.basename(py_file))
+        for root in roots:
+            for path, _, files in os.walk(os.path.join(PROJECT_ROOT, root)):
+                if "node_modules" in path:
+                    continue
+                for filename in files:
+                    if not filename.endswith((".py", ".sh", ".yml", ".yaml", ".ipynb", ".md", ".ts", ".tsx")):
+                        continue
+                    file_path = os.path.join(path, filename)
+                    with open(file_path, errors="ignore") as f:
+                        content = f.read()
+                    if any(re.search(pattern, content) for pattern in forbidden):
+                        violations.append(os.path.relpath(file_path, PROJECT_ROOT))
         
         assert not violations, \
-            f"Hardcoded DB password found in: {', '.join(violations)}"
+            f"Sensitive literals found in: {', '.join(violations)}"
 
 
 # ─── Test 5: Model Metadata ──────────────────────────────────

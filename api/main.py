@@ -26,13 +26,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import URL
 
 # Import shared config
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src.config import DB_CONFIG, MODEL_DIR
 
 # ─── Config ───────────────────────────────────────────────
-DB_URL = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']}"
+DB_URL = URL.create(
+    "postgresql+psycopg2",
+    username=DB_CONFIG["user"],
+    password=DB_CONFIG["password"],
+    host=DB_CONFIG["host"],
+    port=DB_CONFIG["port"],
+    database=DB_CONFIG["dbname"],
+    query={"sslmode": DB_CONFIG["sslmode"]} if DB_CONFIG.get("sslmode") else {},
+)
+
+DEFAULT_CORS_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("API_CORS_ORIGINS", DEFAULT_CORS_ORIGINS).split(",")
+    if origin.strip()
+]
 
 COUNTRIES = ["IN", "US", "GB", "AU"]
 DEFAULT_COUNTRY = "IN"
@@ -98,7 +114,7 @@ def classify_naqi(pm25_value: float) -> str:
 def get_db_engine():
     """Get a SQLAlchemy engine."""
     try:
-        return create_engine(DB_URL)
+        return create_engine(DB_URL, pool_pre_ping=True)
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Database unavailable: {str(e)}")
 
@@ -173,12 +189,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Allow frontend to call API from any origin (local development)
+# Keep CORS explicit. Set API_CORS_ORIGINS for deployed frontend domains.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 

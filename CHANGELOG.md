@@ -65,7 +65,7 @@ All notable changes to this project will be documented in this file.
 ## [11.1.2] - Azure DB Audit & AOD Backfill Hardening (2026-06-27)
 
 ### 🔍 Full Azure DB Audit
-- **Performed a 44-column NULL analysis** across 1.63M rows in `daily_features` on Azure Flexible PostgreSQL (`globalaqiserver.postgres.database.azure.com`).
+- **Performed a 44-column NULL analysis** across 1.63M rows in `daily_features` on Azure Flexible PostgreSQL (`<azure-postgres-host>`).
 - **Identified 13 legacy columns at 94.5–97.2% NULL** (`temperature`, `humidity`, `wind_speed`, `no2_value`, `co_value`, `o3_value`, `so2_value`, `nasa_*`, `precipitation`, `wind_direction`, `fire_count`). These are superseded by `om_*` columns (99.5% fill rate). See Issue #22.
 - **Discovered 1,464 orphan stations** (35% of 4,193) with zero rows in `daily_features`. See Issue #23.
 - **Found empty operational tables:** `model_registry`, `predictions`, and 4 country-specific feature tables (`features_india/usa/uk/australia`). See Issue #24.
@@ -74,7 +74,7 @@ All notable changes to this project will be documented in this file.
 ### 🔧 AOD Backfill & Environment Sync (Issue #21)
 - **Fixed Environment State Divergence:** Previous merge script ran against `localhost` instead of Azure DB. Resolved by explicitly configuring `POSTGRES_HOST` in `.env` and creating `scripts/azure_merge_aod.py` for direct Azure VM execution.
 - **Merged 1,069,944 AOD rows** from `satellite_aod_features` → `daily_features` on Azure DB.
-- **Bypassed Open-Meteo IP block:** Azure VM IP (`4.213.226.19`) was rate-limited after API bombardment. Configured local Mac Mini as a tunnel — script runs from Mac (clean home IP) and writes directly to Azure DB.
+- **Bypassed Open-Meteo IP block:** the Azure VM egress IP was rate-limited after API bombardment. Configured local Mac Mini as a tunnel — script runs from Mac (clean home IP) and writes directly to Azure DB.
 
 ### 🛡️ Script Hardening (`backfill_full_aod.py`)
 - **DB reconnection logic:** `_get_connection()` with 3-attempt retry and exponential wait on `OperationalError`.

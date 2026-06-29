@@ -21,6 +21,7 @@ import subprocess
 import sys
 import time
 import uuid
+import hmac
 from datetime import datetime, date, timedelta
 from typing import Optional
 
@@ -28,14 +29,14 @@ import psycopg2
 import psycopg2.extras
 
 try:
-    from fastapi import FastAPI, BackgroundTasks
+    from fastapi import FastAPI, BackgroundTasks, Request
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
     import uvicorn
 except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install",
                            "fastapi", "uvicorn[standard]", "-q"])
-    from fastapi import FastAPI, BackgroundTasks
+    from fastapi import FastAPI, BackgroundTasks, Request
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
     import uvicorn
@@ -48,12 +49,34 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SITE_DATA = SITE_DATA_DIR
 SITE_REPO = FRONTEND_REPO
 
-ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")  # optional auth token
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "").strip()
+ADMIN_PUBLIC_READ = os.environ.get("ADMIN_PUBLIC_READ", "false").lower() in {"1", "true", "yes"}
+ADMIN_ALLOW_UNAUTH_REMOTE = os.environ.get("ADMIN_ALLOW_UNAUTH_REMOTE", "false").lower() in {"1", "true", "yes"}
 
 app = FastAPI(title="Global AQ Admin")
 app.add_middleware(CORSMiddleware,
                    allow_origins=["http://localhost:8050", "http://127.0.0.1:8050"],
                    allow_methods=["*"], allow_headers=["*"])
+
+
+@app.middleware("http")
+async def require_admin_token(request: Request, call_next):
+    """Protect mutating/admin API routes when ADMIN_TOKEN is configured."""
+    path = request.url.path
+    is_api = path.startswith("/api/")
+    is_read = request.method == "GET" and ADMIN_PUBLIC_READ
+    client_host = request.client.host if request.client else ""
+    is_local = client_host in {"127.0.0.1", "::1"} or request.url.hostname in {"localhost", "127.0.0.1"}
+    if ADMIN_TOKEN and is_api and not is_read:
+        supplied = request.headers.get("x-admin-token") or request.query_params.get("token", "")
+        if not hmac.compare_digest(supplied, ADMIN_TOKEN):
+            return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    if not ADMIN_TOKEN and is_api and not is_local and not ADMIN_ALLOW_UNAUTH_REMOTE:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "ADMIN_TOKEN is required before exposing admin APIs"},
+        )
+    return await call_next(request)
 
 # ─── Live pipeline state ─────────────────────────────────────
 pipeline_state = {
@@ -803,10 +826,18 @@ ADMIN_HTML = """<!DOCTYPE html>
         const FLAGS = {IN:'🇮🇳', US:'🇺🇸', GB:'🇬🇧', AU:'🇦🇺'};
         const NAMES = {IN:'India', US:'United States', GB:'United Kingdom', AU:'Australia'};
         let pollInterval = null;
+        const adminToken = new URLSearchParams(window.location.search).get('token') || localStorage.getItem('adminToken') || '';
+        if (adminToken) localStorage.setItem('adminToken', adminToken);
+
+        function apiFetch(url, options = {}) {
+            const headers = Object.assign({}, options.headers || {});
+            if (adminToken) headers['x-admin-token'] = adminToken;
+            return fetch(url, Object.assign({}, options, {headers}));
+        }
 
         async function loadStatus() {
             try {
-                const res = await fetch('/api/status');
+                const res = await apiFetch('/api/status');
                 const d = await res.json();
                 if (d.error) { console.error(d.error); return; }
 
@@ -896,7 +927,7 @@ ADMIN_HTML = """<!DOCTYPE html>
             btn.innerHTML = '⏳ Executing Time-Travel Merge...';
             msg.style.display = 'none';
             try {
-                const res = await fetch('/api/admin/run-validation', {method: 'POST'});
+                const res = await apiFetch('/api/admin/run-validation', {method: 'POST'});
                 const data = await res.json();
                 msg.style.display = 'block';
                 if (res.ok && data.status === 'success') {
@@ -923,12 +954,12 @@ ADMIN_HTML = """<!DOCTYPE html>
             document.getElementById('logStatus').className = 'log-status log-running';
             document.getElementById('logStatus').textContent = '⏳ Running';
 
-            await fetch(`/api/${step}`, {method: 'POST'});
+            await apiFetch(`/api/${step}`, {method: 'POST'});
 
             // Poll logs
             if (pollInterval) clearInterval(pollInterval);
             pollInterval = setInterval(async () => {
-                const res = await fetch('/api/logs');
+                const res = await apiFetch('/api/logs');
                 const data = await res.json();
 
                 let html = '';
@@ -959,7 +990,7 @@ ADMIN_HTML = """<!DOCTYPE html>
 
         async function loadDrift() {
             try {
-                const res = await fetch('/api/admin/validation-drift');
+                const res = await apiFetch('/api/admin/validation-drift');
                 const data = await res.json();
                 if (data && data.length > 0) {
                     document.getElementById('drift-status').style.display = 'none';

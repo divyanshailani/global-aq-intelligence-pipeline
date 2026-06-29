@@ -28,7 +28,7 @@ services:
   #   container_name: globalaqi-db
   #   environment:
   #     POSTGRES_USER: postgres
-  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-8765}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
   #     POSTGRES_DB: indiaaq
   #   ports:
   #     - "5432:5432"

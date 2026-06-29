@@ -17,12 +17,21 @@ import psycopg2
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "daily_features_full.parquet")
 
+def require_env(name: str) -> str:
+    """Read required database settings without shipping credentials in git."""
+    value = os.getenv(name, "").strip()
+    if not value:
+        raise RuntimeError(f"{name} is required. Put it in .env or your secret manager.")
+    return value
+
+
 DB_CONFIG = {
-    "host": os.getenv("POSTGRES_HOST", "globalaqiserver.postgres.database.azure.com"),
-    "user": os.getenv("POSTGRES_USER", "postgresadmin"),
-    "password": os.getenv("POSTGRES_PASSWORD", "[REDACTED]"),
-    "dbname": os.getenv("POSTGRES_DB", "indiaaq"),
-    "sslmode": "require",
+    "host": require_env("POSTGRES_HOST"),
+    "user": require_env("POSTGRES_USER"),
+    "password": require_env("POSTGRES_PASSWORD"),
+    "dbname": require_env("POSTGRES_DB"),
+    "port": int(os.getenv("POSTGRES_PORT", "5432")),
+    "sslmode": os.getenv("POSTGRES_SSLMODE", "require"),
 }
 
 QUERY = """

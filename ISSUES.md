@@ -265,11 +265,11 @@ Understood that the `0d gap` metric represents the "freshest available data poin
 **Issue:**
 During the AOD backfill operation, a merge script (`/tmp/merge_aod.py`) was run on the local Mac Mini to copy AOD data from `satellite_aod_features` into `daily_features`. However, the `.env` file had no `POSTGRES_HOST` configured — so it defaulted to `localhost`. The script successfully updated **1,069,944 rows** in the local PostgreSQL database while the Azure Flexible PostgreSQL production database remained completely untouched with 100% NULL AOD values.
 
-Subsequently, running `backfill_full_aod.py` on the Azure VM triggered Open-Meteo rate limits (HTTP 429) because the API had already been heavily queried, causing the Azure VM's IP (`4.213.226.19`) to get flagged by the WAF.
+Subsequently, running `backfill_full_aod.py` on the Azure VM triggered Open-Meteo rate limits (HTTP 429) because the API had already been heavily queried, causing the Azure VM's egress IP to get flagged by the WAF.
 
 **Solution:**
 1. Created `scripts/azure_merge_aod.py` with the correct Azure project path (`/opt/pow-eda-pipeline`) and ran it directly on the Azure VM to sync 1,069,944 rows from `satellite_aod_features` → `daily_features`.
-2. For remaining Open-Meteo gaps: configured the local Mac Mini's `.env` with Azure DB credentials (`POSTGRES_HOST=globalaqiserver.postgres.database.azure.com`) and ran `backfill_full_aod.py` from the Mac. This bypassed the IP block since the Mac's home IP was clean.
+2. For remaining Open-Meteo gaps: configured the local Mac Mini's `.env` with Azure DB credentials (`POSTGRES_HOST=<azure-postgres-host>`) and ran `backfill_full_aod.py` from the Mac. This bypassed the IP block since the Mac's home IP was clean.
 3. Hardened `backfill_full_aod.py` with DB reconnection logic, exponential backoff (30s→150s), network timeout handling, and proper `len(values)` row counting (since `execute_batch` does not reliably set `cur.rowcount`).
 
 **Lesson:** Always verify `POSTGRES_HOST` before running data migration scripts. Local and cloud databases can silently diverge, creating a "Split Reality" where development looks healthy but production is broken.
