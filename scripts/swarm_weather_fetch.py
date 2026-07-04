@@ -216,6 +216,7 @@ def main():
     with ThreadPoolExecutor(max_workers=args.max_concurrent) as executor:
         futures = []
         for sid in my_shard_ids:
+            sid = int(sid)  # Cast away from numpy.int64 to prevent psycopg2 errors
             lat = station_data[sid]["lat"]
             lon = station_data[sid]["lon"]
             dates = station_data[sid]["dates"]
