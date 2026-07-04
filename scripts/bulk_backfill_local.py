@@ -2,7 +2,7 @@
 Bulk Backfill (Local) — OpenAQ S3 Architecture
 ==============================================
 Runs on local Mac Mini. 
-Massive concurrency S3 scraper to backfill missing 2021-present data.
+Massive concurrency S3 scraper to backfill missing June 2026-present data.
 Bypasses the OpenAQ API rate limits completely.
 """
 
@@ -26,7 +26,7 @@ from src.config import DB_CONFIG
 
 # Configuration
 CONCURRENCY = 100
-START_DATE = datetime(2021, 1, 1).date()
+START_DATE = datetime(2026, 6, 16).date()
 END_DATE = datetime.utcnow().date()
 TARGET_COUNTRIES = ["US", "GB", "AU", "IN"] 
 
