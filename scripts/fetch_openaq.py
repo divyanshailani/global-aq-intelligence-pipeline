@@ -65,9 +65,46 @@ def _load_openaq_keys():
 
 OPENAQ_KEYS_LIST = _load_openaq_keys()
 
-def get_random_header():
-    import random
-    return {"X-API-Key": random.choice(OPENAQ_KEYS_LIST)}
+import threading
+import time
+
+class KeyManager:
+    def __init__(self, keys):
+        self.keys = list(keys)
+        self.index = 0
+        self.cooldowns = {}
+        self.lock = threading.Lock()
+        
+    def get_key(self):
+        with self.lock:
+            now = time.time()
+            for k, unban_time in list(self.cooldowns.items()):
+                if now > unban_time:
+                    if k not in self.keys:
+                        self.keys.append(k)
+                    del self.cooldowns[k]
+                    
+            if not self.keys:
+                return None
+                
+            key = self.keys[self.index % len(self.keys)]
+            self.index = (self.index + 1) % len(self.keys)
+            return key
+            
+    def report_429(self, key):
+        with self.lock:
+            if key in self.keys:
+                self.keys.remove(key)
+                self.cooldowns[key] = time.time() + 60.0
+                print(f"  [RATE LIMIT] Key {key[:7]}... in 60s cooldown.")
+                
+    def report_401(self, key):
+        with self.lock:
+            if key in self.keys:
+                self.keys.remove(key)
+                print(f"  [BANNED] Key {key[:7]}... permanently suspended (401).")
+
+km = KeyManager(OPENAQ_KEYS_LIST)
 
 
 def get_db_connection():
@@ -87,10 +124,16 @@ def fetch_country_stations(country_code):
     page = 1
 
     while True:
+        key = km.get_key()
+        if not key:
+            print("  All keys in cooldown, waiting 10s...")
+            time.sleep(10)
+            continue
+            
         print(f"  Fetching stations page {page}...")
         r = requests.get(
             f"{API_BASE}/locations",
-            headers=get_random_header(),
+            headers={"X-API-Key": key},
             params={
                 "countries_id": country_info["openaq_id"],
                 "limit": 1000,
@@ -99,8 +142,11 @@ def fetch_country_stations(country_code):
         )
 
         if r.status_code == 429:
-            print(f"  API rate limit hit. Rotating key and sleeping 2s...")
-            time.sleep(2)
+            km.report_429(key)
+            time.sleep(10)
+            continue
+        elif r.status_code in (401, 403):
+            km.report_401(key)
             continue
         elif r.status_code != 200:
             print(f"  API error {r.status_code}: {r.text[:200]}")
@@ -187,9 +233,19 @@ async def fetch_station_sensors_async(session, station_openaq_id, semaphore):
     url = f"{API_BASE}/locations/{station_openaq_id}/sensors"
     for attempt in range(5):
         async with semaphore:
-            async with session.get(url, headers=get_random_header()) as r:
+            await asyncio.sleep(0.2)  # global rate limit buffer
+            key = km.get_key()
+            if not key:
+                await asyncio.sleep(5)
+                continue
+                
+            async with session.get(url, headers={"X-API-Key": key}) as r:
                 if r.status == 429:
+                    km.report_429(key)
                     await asyncio.sleep(5)
+                    continue
+                if r.status in (401, 403):
+                    km.report_401(key)
                     continue
                 if r.status != 200:
                     return []
@@ -211,9 +267,19 @@ async def fetch_sensor_measurements_async(session, sensor_id, date_from, date_to
         data = None
         for attempt in range(5):
             async with semaphore:
-                async with session.get(url, headers=get_random_header(), params=params) as r:
+                await asyncio.sleep(0.2)  # global rate limit buffer
+                key = km.get_key()
+                if not key:
+                    await asyncio.sleep(5)
+                    continue
+                    
+                async with session.get(url, headers={"X-API-Key": key}, params=params) as r:
                     if r.status == 429:
+                        km.report_429(key)
                         await asyncio.sleep(5)
+                        continue
+                    if r.status in (401, 403):
+                        km.report_401(key)
                         continue
                     if r.status != 200:
                         break
@@ -241,7 +307,7 @@ async def fetch_sensor_measurements_async(session, sensor_id, date_from, date_to
             break
             
         page += 1
-        await asyncio.sleep(0.05)  # gentle backoff inside semaphore
+        await asyncio.sleep(0.5)  # strict gentle backoff inside semaphore
         
     return all_measurements
 
@@ -399,7 +465,7 @@ def run_fetch(country_code, days=None, date_from=None, date_to=None, resume=Fals
 
     async def run_chunked_processing():
         nonlocal total_rows, completed
-        semaphore = asyncio.Semaphore(10)
+        semaphore = asyncio.Semaphore(6)
         chunk_size = 50
         
         # OpenAQ returns 429 easily, so setting connector limit is helpful
