@@ -81,7 +81,7 @@ jobs:
       - name: 🌐 Step 1 - Fetch Latest OpenAQ & NASA POWER Data
         run: |
           echo "Starting Data Collection..."
-          python scripts/run_daily_collector.py --incremental-only
+          python -u scripts/run_daily_collector.py --incremental-only
 
       - name: 🧹 Step 1b - Run Daily ETL Pipeline
         run: |

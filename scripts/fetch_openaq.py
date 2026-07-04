@@ -233,7 +233,7 @@ async def fetch_station_sensors_async(session, station_openaq_id, semaphore):
     url = f"{API_BASE}/locations/{station_openaq_id}/sensors"
     for attempt in range(5):
         async with semaphore:
-            await asyncio.sleep(0.2)  # global rate limit buffer
+            await asyncio.sleep(0.5)  # global rate limit buffer
             key = km.get_key()
             if not key:
                 await asyncio.sleep(5)
@@ -267,7 +267,7 @@ async def fetch_sensor_measurements_async(session, sensor_id, date_from, date_to
         data = None
         for attempt in range(5):
             async with semaphore:
-                await asyncio.sleep(0.2)  # global rate limit buffer
+                await asyncio.sleep(0.5)  # global rate limit buffer
                 key = km.get_key()
                 if not key:
                     await asyncio.sleep(5)
@@ -465,7 +465,7 @@ def run_fetch(country_code, days=None, date_from=None, date_to=None, resume=Fals
 
     async def run_chunked_processing():
         nonlocal total_rows, completed
-        semaphore = asyncio.Semaphore(6)
+        semaphore = asyncio.Semaphore(4)
         chunk_size = 50
         
         # OpenAQ returns 429 easily, so setting connector limit is helpful
