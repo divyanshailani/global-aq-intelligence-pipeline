@@ -141,11 +141,11 @@ def process_station(fallback_manager, station_id, lat, lon, dates):
         a_data = aod_map.get(dt_str, {})
 
         updates.append((
-            w_data.get("om_temperature"),
-            w_data.get("om_wind_speed"),
-            w_data.get("om_precipitation"),
-            a_data.get("om_aerosol_optical_depth"),
-            station_id,
+            float(w_data.get("om_temperature")) if w_data.get("om_temperature") is not None else None,
+            float(w_data.get("om_wind_speed")) if w_data.get("om_wind_speed") is not None else None,
+            float(w_data.get("om_precipitation")) if w_data.get("om_precipitation") is not None else None,
+            float(a_data.get("om_aerosol_optical_depth")) if a_data.get("om_aerosol_optical_depth") is not None else None,
+            int(station_id),
             dt
         ))
 
@@ -237,6 +237,7 @@ def main():
     # 5. Bulk Upserting
     if successful_updates:
         print(f"💾 Bulk updating {len(successful_updates)} missing rows in Azure DB...")
+        print("DEBUG TYPES:", [type(x) for x in successful_updates[0]])
         with conn.cursor() as cur:
             execute_batch(cur, """
                 UPDATE daily_features
