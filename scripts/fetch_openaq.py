@@ -228,12 +228,26 @@ def get_station_id_map(conn, country_code):
         return {row[1]: row[0] for row in cur.fetchall()}
 
 
+last_req_time = 0.0
+rate_lock = None
+
+async def rate_limit_sleep():
+    global rate_lock, last_req_time
+    if rate_lock is None:
+        rate_lock = asyncio.Lock()
+    async with rate_lock:
+        now = time.time()
+        elapsed = now - last_req_time
+        if elapsed < 0.34:
+            await asyncio.sleep(0.34 - elapsed)
+        last_req_time = time.time()
+
 # Step 2: Fetch measurements (ASYNC BATCHED)
 async def fetch_station_sensors_async(session, station_openaq_id, semaphore):
     url = f"{API_BASE}/locations/{station_openaq_id}/sensors"
     for attempt in range(5):
         async with semaphore:
-            await asyncio.sleep(0.5)  # global rate limit buffer
+            await rate_limit_sleep()
             key = km.get_key()
             if not key:
                 await asyncio.sleep(5)
@@ -267,7 +281,7 @@ async def fetch_sensor_measurements_async(session, sensor_id, date_from, date_to
         data = None
         for attempt in range(5):
             async with semaphore:
-                await asyncio.sleep(0.5)  # global rate limit buffer
+                await rate_limit_sleep()
                 key = km.get_key()
                 if not key:
                     await asyncio.sleep(5)
@@ -497,6 +511,10 @@ def run_fetch(country_code, days=None, date_from=None, date_to=None, resume=Fals
                 last_station_id = chunk[-1]["openaq_id"]
                 save_checkpoint(country_code, last_station_id, completed)
 
+    # Reset lock for the new event loop
+    global rate_lock
+    rate_lock = None
+    
     # Run the event loop
     asyncio.run(run_chunked_processing())
 
