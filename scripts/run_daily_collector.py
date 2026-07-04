@@ -114,16 +114,21 @@ def run_incremental(countries, days=7):
     results = {}
     for cc in countries:
         try:
-            # Dynamically calculate exact gap to avoid over-fetching and wasting time.
-            # Use 'days' argument only if explicitly overridden from the default 7.
             fetch_days = get_gap_days(cc) if days == 7 else days
             
-            print(f"\n  [INCREMENTAL] {cc} gap calculated. Fetching last {fetch_days} days...")
+            print(f"\n  [INCREMENTAL] {cc} gap calculated. Fetching last {fetch_days} days via S3...")
             stats = run_fetch(cc, days=fetch_days)
-            results[cc] = {"status": "success", "rows": stats["rows_inserted"]}
+            results[cc] = {"status": "success", "rows": stats["rows_inserted"], "source": "S3"}
         except Exception as e:
-            print(f"  {cc} FAILED: {e}")
-            results[cc] = {"status": "failed", "error": str(e)}
+            print(f"  {cc} S3 FETCH FAILED: {e}. Initiating Fallback to legacy OpenAQ API...")
+            try:
+                from scripts.legacy_api_fetcher import run_fetch as legacy_run_fetch
+                stats = legacy_run_fetch(cc, days=fetch_days)
+                results[cc] = {"status": "success", "rows": stats["rows_inserted"], "source": "API_FALLBACK"}
+                print(f"  {cc} API FALLBACK SUCCESS.")
+            except Exception as e2:
+                print(f"  {cc} API FALLBACK ALSO FAILED: {e2}")
+                results[cc] = {"status": "failed", "error": f"S3: {e} | API: {e2}"}
 
     return results
 
@@ -161,28 +166,39 @@ def run_backfill(countries, chunk_days=90):
         if is_final_chunk:
             chunk_end = today
 
-        print(f"\n  {cc}: Backfilling {chunk_start} to {chunk_end}")
-
         try:
+            print(f"\n  {cc}: Backfilling {chunk_start} to {chunk_end} via S3")
             stats = run_fetch(cc, date_from=chunk_start, date_to=chunk_end)
             results[cc] = {
                 "status": "success",
                 "chunk": f"{chunk_start} to {chunk_end}",
                 "rows": stats["rows_inserted"],
+                "source": "S3"
             }
-
-            # Advance the window
-            if is_final_chunk:
-                entry["status"] = "complete"
-                entry["completed_at"] = today
-                print(f"  {cc}: BACKFILL COMPLETE!")
-            else:
-                entry["current_start"] = chunk_end
-
         except Exception as e:
-            print(f"  {cc} FAILED: {e}")
-            results[cc] = {"status": "failed", "error": str(e)}
-            # Don't advance — retry same chunk next time
+            print(f"  {cc} S3 BACKFILL FAILED: {e}. Initiating Fallback to legacy OpenAQ API...")
+            try:
+                from scripts.legacy_api_fetcher import run_fetch as legacy_run_fetch
+                stats = legacy_run_fetch(cc, date_from=chunk_start, date_to=chunk_end)
+                results[cc] = {
+                    "status": "success",
+                    "chunk": f"{chunk_start} to {chunk_end}",
+                    "rows": stats["rows_inserted"],
+                    "source": "API_FALLBACK"
+                }
+                print(f"  {cc} API FALLBACK SUCCESS.")
+            except Exception as e2:
+                print(f"  {cc} API FALLBACK ALSO FAILED: {e2}")
+                results[cc] = {"status": "failed", "error": f"S3: {e} | API: {e2}"}
+                continue # Don't advance window if both fail
+
+        # Advance the window
+        if is_final_chunk:
+            entry["status"] = "complete"
+            entry["completed_at"] = today
+            print(f"  {cc}: BACKFILL COMPLETE!")
+        else:
+            entry["current_start"] = chunk_end
 
     save_backfill_state(state)
 
