@@ -352,6 +352,16 @@ def bulk_insert_features(conn, features_df, page_size=5000):
 
     with conn.cursor() as cur:
         execute_values(cur, sql, values, page_size=page_size)
+        
+        # Patch country_code for any newly inserted rows
+        cur.execute("""
+            UPDATE daily_features df
+            SET country_code = s.country_code
+            FROM stations s
+            WHERE df.station_id = s.id
+            AND df.country_code IS NULL
+        """)
+        
     conn.commit()
     return len(values)
 
