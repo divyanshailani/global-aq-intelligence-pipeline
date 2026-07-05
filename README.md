@@ -290,7 +290,13 @@ Currently running a 4-node parallel AOD backfill to fill ~540K NULL satellite re
      └──────────────────────────────┘
 ```
 
-Each VM runs `backfill_aod_partitioned.py --partition N --total 4` in a tmux session.
+Each VM runs `scripts/swarm_weather_fetch.py --shard-id N --total-shards 4 --max-concurrent 10` in the background.
+
+### 🐛 psycopg2 numpy.int64 Adaptation Bug
+During the distributed swarm deployment, a critical `psycopg2.ProgrammingError: can't adapt type 'numpy.int64'` crashed the bulk-upserts. The root cause was `np.array_split` implicitly casting the station IDs into hidden numpy scalar types, which `psycopg2.extras.execute_batch` natively rejects. This was permanently fixed by wrapping all data points in explicit native Python `float()` and `int()` casts prior to the SQL tuple injection.
+
+### ⏱️ Pipeline Traffic Optimization
+The automated GitHub Action (`daily_pipeline.yml`) cron schedule was migrated to `30 5 * * *` (5:30 UTC) to bypass GitHub Action queue traffic spikes, ensuring stable daily updates.
 
 > For the full database audit report, see [`CHANGELOG.md`](CHANGELOG.md) entry `[11.1.3]`.
 
