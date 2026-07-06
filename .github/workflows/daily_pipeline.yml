@@ -2,7 +2,7 @@ name: Global AQI Daily Pipeline
 
 on:
   schedule:
-    - cron: '30 5 * * *'
+    - cron: '43 5 * * *'
   workflow_dispatch: # Manual trigger still works for emergencies
 
 jobs:
