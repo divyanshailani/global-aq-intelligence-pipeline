@@ -10,6 +10,12 @@ echo "Started daily prediction at $(date)"
 cd /opt/pow-eda-pipeline
 git pull origin main
 
+if [ -f /opt/pow-eda-pipeline/.env ]; then
+    set -a
+    source /opt/pow-eda-pipeline/.env
+    set +a
+fi
+
 source venv/bin/activate
 echo "Exporting Parquet..."
 python3 scripts/export_azure_to_parquet.py
