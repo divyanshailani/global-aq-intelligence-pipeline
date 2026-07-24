@@ -29,6 +29,10 @@ if [ ! -d "global-aq-intelligence-web" ]; then
     git clone git@github.com:divyanshailani/global-aq-intelligence-web.git
 fi
 
+cd global-aq-intelligence-web
+git pull origin main --rebase || git reset --hard origin/main
+cd ..
+
 echo "Copying JSON to frontend repo..."
 cp site_data/*.json global-aq-intelligence-web/public/data/
 cp site_data/model_meta.json global-aq-intelligence-web/public/data/
