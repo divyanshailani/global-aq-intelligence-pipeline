@@ -52,6 +52,7 @@ node_modules/
 *.dump
 *.backup
 *.sql.gz
+backups/
 *.pem
 *.key
 *.p12
