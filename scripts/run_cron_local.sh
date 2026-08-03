@@ -38,7 +38,7 @@ python3 "$PIPELINE_DIR/scripts/run_daily_collector.py"
 
 # Step 2: ETL — clean raw → clean_measurements, features → daily_features
 echo "Running ETL..."
-python3 "$PIPELINE_DIR/scripts/run_daily_etl.py"
+python3 "$PIPELINE_DIR/scripts/run_daily_etl.py" --recent-days 5
 
 # Step 3: V12 ONNX inference from acc 2 daily_features
 echo "Running ONNX inference..."
@@ -48,6 +48,6 @@ python3 "$PIPELINE_DIR/scripts/predict_v12_onnx.py"
 echo "Syncing to frontend..."
 mkdir -p "$FRONTEND_DIR/public/data"
 cp "$PIPELINE_DIR/site_data/"*.json "$FRONTEND_DIR/public/data/" 2>/dev/null || true
-cp "$PIPELINE_DIR/site_data/model_meta.json "$FRONTEND_DIR/public/data/" 2>/dev/null || true
+cp "$PIPELINE_DIR/site_data/model_meta.json" "$FRONTEND_DIR/public/data/" 2>/dev/null || true
 
 echo "Finished daily pipeline at $(date)"
