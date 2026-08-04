@@ -4,9 +4,11 @@ Ad-hoc checks written while fixing the Aug 2026 pipeline failures. Run them
 after touching the collector, ETL, scheduler script, or validator.
 
 ```bash
-cd ~/Desktop/pow-eda-pipeline && source venv/bin/activate
-for f in tests/verify_*.py; do python3 "$f" || echo "FAILED: $f"; done
+cd ~/Desktop/pow-eda-pipeline
+python3 tests/run_all.py        # runs every verify_*.py, aggregates pass/fail
 ```
+
+Individual scripts can be run directly if you want the detailed output.
 
 | File | Covers | DB writes? |
 |---|---|---|
