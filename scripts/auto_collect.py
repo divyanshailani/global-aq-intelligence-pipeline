@@ -67,24 +67,14 @@ def main():
     else:
         log("Phase 1: Collection complete.")
 
-    # Phase 2: Git commit and push
-    log("Phase 2: Git commit & push...")
-    collection_log = os.path.join(PROJECT_DIR, "logs", "collection_log.json")
-    
-    if os.path.exists(collection_log):
-        run_cmd("git add logs/collection_log.json")
-        
-        # Check if there are staged changes
-        rc = run_cmd("git diff --cached --quiet")
-        if rc != 0:  # rc != 0 means there ARE changes
-            date_str = datetime.now().strftime("%Y-%m-%d")
-            run_cmd(f'git commit -m "data: daily collection {date_str}"')
-            run_cmd("git push origin main")
-            log("Pushed to GitHub.")
-        else:
-            log("No changes to commit.")
+    # Phase 2: Full pipeline (ETL + inference + frontend sync)
+    log("Phase 2: Running ETL + inference + frontend sync...")
+    pipeline_script = os.path.join(PROJECT_DIR, "scripts", "run_cron_local.sh")
+    rc = run_cmd(f"bash {pipeline_script}")
+    if rc != 0:
+        log(f"WARNING: Pipeline exited with code {rc}")
     else:
-        log("No collection_log.json found, skipping git.")
+        log("Phase 2: Pipeline complete.")
 
     log("AUTO-COLLECTOR DONE")
     log("")
