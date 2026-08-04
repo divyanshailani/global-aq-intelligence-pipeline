@@ -35,6 +35,11 @@ LOG_FILE = os.path.join(LOG_DIR, "collection_log.json")
 BACKFILL_STATE_FILE = os.path.join(LOG_DIR, "backfill_state.json")
 
 BACKFILL_START = "2021-01-01"
+
+# Upper bound on the incremental window. The live-API fallback re-fetches every
+# day in the window across every station, so an unbounded gap turns one nightly
+# run into hours of work. 7 days/night converges after any realistic outage.
+MAX_INCREMENTAL_DAYS = 7
 # Countries to backfill (skip IN — already done)
 BACKFILL_COUNTRIES = ["US", "GB", "AU"]
 
@@ -98,9 +103,13 @@ def get_gap_days(cc):
                 last_dt = last_dt.replace(tzinfo=None).date()
             elif hasattr(last_dt, 'date'):
                 last_dt = last_dt.date()
-            
+
             gap = (datetime.utcnow().date() - last_dt).days
-            return max(1, gap + 1) # fetch at least 1 day, plus 1 for safe overlap
+            # Cap the window. The live-API fallback re-fetches every day in the
+            # window across every station, so a long gap (e.g. after an outage)
+            # makes one nightly run take hours. Catching up 7 days per night is
+            # plenty — consecutive runs converge — and keeps runtime bounded.
+            return max(1, min(gap + 1, MAX_INCREMENTAL_DAYS))
     except Exception as e:
         print(f"  Warning: could not compute gap for {cc} ({e}), defaulting to 7")
     return 7
