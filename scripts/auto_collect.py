@@ -56,25 +56,16 @@ def main():
     log("AUTO-COLLECTOR STARTED")
     log("=" * 50)
 
-    # Phase 1: Run daily collector
-    python = "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
-    script = os.path.join(PROJECT_DIR, "scripts", "run_daily_collector.py")
-    
-    log("Phase 1: Running daily collector...")
-    rc = run_cmd(f"{python} {script} --days 7")
-    if rc != 0:
-        log(f"WARNING: Collector exited with code {rc}")
-    else:
-        log("Phase 1: Collection complete.")
-
-    # Phase 2: Full pipeline (ETL + inference + frontend sync)
-    log("Phase 2: Running ETL + inference + frontend sync...")
+    # Phase 1: Full pipeline (collect + ETL + inference + validate + publish).
+    # run_cron_local.sh already runs the collector as its Step 1, so calling
+    # the collector here too would double-fetch every day.
+    log("Phase 1: Running full pipeline...")
     pipeline_script = os.path.join(PROJECT_DIR, "scripts", "run_cron_local.sh")
     rc = run_cmd(f"bash {pipeline_script}")
     if rc != 0:
         log(f"WARNING: Pipeline exited with code {rc}")
     else:
-        log("Phase 2: Pipeline complete.")
+        log("Phase 1: Pipeline complete.")
 
     log("AUTO-COLLECTOR DONE")
     log("")

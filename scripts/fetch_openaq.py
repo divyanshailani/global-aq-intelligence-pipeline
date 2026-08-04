@@ -58,10 +58,17 @@ def get_checkpoint_file(country_code):
 # Stations MUST already be in the database from the previous API backfill.
 # If a new station appears, it won't be picked up. We assume stations are static for now.
 def get_station_id_map(conn, country_code):
-    """Get openaq_id -> internal id mapping for a country."""
+    """Get openaq_id -> internal id mapping for a country.
+
+    Only stations with a non-NULL openaq_id are returned. ~1400 legacy
+    stations (from the old API backfill) have openaq_id IS NULL — they can
+    never be fetched from S3, so including them just burns loop iterations
+    and prints "Fetching station None...".
+    """
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, openaq_id FROM stations WHERE country_code = %s ORDER BY id",
+            "SELECT id, openaq_id FROM stations "
+            "WHERE country_code = %s AND openaq_id IS NOT NULL ORDER BY id",
             (country_code,)
         )
         return [{"internal_id": row[0], "openaq_id": row[1]} for row in cur.fetchall()]

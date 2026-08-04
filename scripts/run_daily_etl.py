@@ -68,6 +68,10 @@ def main():
                         help="Only run cleaning (skip features)")
     parser.add_argument("--features-only", action="store_true",
                         help="Only run features (skip cleaning)")
+    parser.add_argument("--max-enrich", type=int, default=600,
+                        help="Max rows to weather/AOD-enrich per run "
+                             "(0 = unlimited). Bounds Phase 3 runtime; "
+                             "skipped rows stay NULL and retry next run.")
     args = parser.parse_args()
 
     conn = psycopg2.connect(**DB_CONFIG)
@@ -163,6 +167,18 @@ def main():
                 """, tuple(station_ids) + (weather_lookback,))
 
             missing_rows = cur.fetchall()
+
+        # Bound Phase 3: each row costs 2 sequential Open-Meteo calls (weather
+        # + AOD) and the free tier rate-limits hard, measured at ~10 rows/min.
+        # Unbounded this stage runs 4+ hours and delays inference/publish.
+        # Weather is OPTIONAL — XGBoost hist handles NaN natively — so rows we
+        # skip today simply stay NULL and get picked up on a later run (the
+        # query always re-selects rows where om_* IS NULL).
+        if args.max_enrich and len(missing_rows) > args.max_enrich:
+            print(f"  Capping enrichment: {len(missing_rows)} rows missing, "
+                  f"processing newest {args.max_enrich} this run "
+                  f"(rest stay NULL and retry next run).")
+            missing_rows = missing_rows[:args.max_enrich]
 
         if not missing_rows:
             print("  ✓ All daily_features have complete weather & AOD context.")
