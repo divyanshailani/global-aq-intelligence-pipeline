@@ -10,6 +10,7 @@ Outputs Next.js compatible static JSON directly.
 import os
 import json
 import time
+import uuid
 import argparse
 from datetime import datetime, timedelta, timezone
 import pandas as pd
@@ -215,7 +216,39 @@ def run_inference():
     }
     with open(os.path.join(output_dir, "model_meta.json"), "w") as f:
         json.dump(model_meta, f, indent=2)
-        
+
+    # --- Log predictions to DB for accuracy tracking ---
+    log_run_id = uuid.uuid4()
+    log_run_date = datetime.now(timezone.utc).date()
+    try:
+        from psycopg2.extras import execute_values
+        log_conn = psycopg2.connect(**DB_CONFIG)
+        log_cur = log_conn.cursor()
+        rows = []
+        for cc, data in predictions.items():
+            for fc in data["forecast"]:
+                rows.append((
+                    str(log_run_id), log_run_date, cc,
+                    None,  # station_id (aggregated, no per-station log yet)
+                    fc["target_date"], fc["horizon_days"],
+                    fc["mean_pm25"], None, None
+                ))
+        if rows:
+            execute_values(
+                log_cur,
+                """INSERT INTO prediction_log
+                   (run_id, run_date, country_code, station_id, target_date,
+                    horizon_days, predicted_value, actual_value, error)
+                   VALUES %s""",
+                rows, template="(%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            )
+            log_conn.commit()
+            print(f"   ✅ Logged {len(rows)} predictions to prediction_log")
+        log_cur.close()
+        log_conn.close()
+    except Exception as e:
+        print(f"   ⚠️  prediction_log write failed: {e}")
+
     print(f"Exported JSON outputs to {output_dir}/")
 
 if __name__ == "__main__":
