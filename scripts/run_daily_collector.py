@@ -113,19 +113,31 @@ def run_incremental(countries, days=7):
 
     results = {}
     for cc in countries:
+        fetch_days = 7
         try:
             fetch_days = get_gap_days(cc) if days == 7 else days
-            
+
             print(f"\n  [INCREMENTAL] {cc} gap calculated. Fetching last {fetch_days} days via S3...")
             stats = run_fetch(cc, days=fetch_days)
-            results[cc] = {"status": "success", "rows": stats["rows_inserted"], "source": "S3"}
+            s3_rows = stats.get("rows_inserted", 0)
+
+            # The S3 archive lags real time by several days and 404s are
+            # swallowed per-station, so a "successful" S3 fetch can insert 0
+            # rows without raising. Treat that as a miss and fall back to the
+            # live v3 API, which does carry the recent days.
+            if s3_rows == 0:
+                print(f"  {cc} S3 returned 0 rows (archive lag). Falling back to live OpenAQ API...")
+                raise RuntimeError("S3 archive returned no rows")
+
+            results[cc] = {"status": "success", "rows": s3_rows, "source": "S3"}
         except Exception as e:
-            print(f"  {cc} S3 FETCH FAILED: {e}. Initiating Fallback to legacy OpenAQ API...")
+            print(f"  {cc} S3 FETCH MISS: {e}. Initiating Fallback to legacy OpenAQ API...")
             try:
                 from scripts.legacy_api_fetcher import run_fetch as legacy_run_fetch
                 stats = legacy_run_fetch(cc, days=fetch_days)
-                results[cc] = {"status": "success", "rows": stats["rows_inserted"], "source": "API_FALLBACK"}
-                print(f"  {cc} API FALLBACK SUCCESS.")
+                api_rows = stats.get("rows_inserted", 0)
+                results[cc] = {"status": "success", "rows": api_rows, "source": "API_FALLBACK"}
+                print(f"  {cc} API FALLBACK SUCCESS: {api_rows} rows.")
             except Exception as e2:
                 print(f"  {cc} API FALLBACK ALSO FAILED: {e2}")
                 results[cc] = {"status": "failed", "error": f"S3: {e} | API: {e2}"}

@@ -168,10 +168,23 @@ def insert_measurements(conn, rows):
         VALUES %s
         ON CONFLICT (station_id, parameter, datetime_utc) DO NOTHING
     """
+    # Count ACTUAL inserts, not rows attempted. ON CONFLICT DO NOTHING silently
+    # drops duplicates, so returning len(rows) made re-fetching already-stored
+    # days report huge fake counts (e.g. "829,121 rows inserted" while the DB
+    # gained nothing) — which hid the fact that S3 had no new data at all.
+    #
+    # execute_values() sets cur.rowcount from only the LAST page it sends, so
+    # we page manually and accumulate to stay correct for batches > page_size.
+    page_size = 5000
+    inserted = 0
     with conn.cursor() as cur:
-        execute_values(cur, sql, rows, page_size=5000)
+        for i in range(0, len(rows), page_size):
+            page = rows[i:i + page_size]
+            execute_values(cur, sql, page, page_size=page_size)
+            if cur.rowcount and cur.rowcount > 0:
+                inserted += cur.rowcount
     conn.commit()
-    return len(rows)
+    return inserted
 
 
 def run_fetch(country_code, days=None, date_from=None, date_to=None, resume=False):
