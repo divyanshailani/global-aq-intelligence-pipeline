@@ -213,6 +213,18 @@ def upsert_stations(conn, stations):
     ]
 
     with conn.cursor() as cur:
+        # Self-heal the id sequence before inserting. Rows were loaded with
+        # explicit ids during the acc1->acc2 migration, which leaves
+        # stations_id_seq far behind MAX(id) (observed: seq=2467 vs
+        # max=87854). ON CONFLICT (openaq_id) does NOT protect the primary
+        # key, so any genuinely new station makes nextval() collide with an
+        # existing id and the whole API fallback dies with
+        # "duplicate key value violates unique constraint stations_pkey".
+        cur.execute("""
+            SELECT setval('stations_id_seq',
+                          GREATEST((SELECT COALESCE(MAX(id), 1) FROM stations),
+                                   (SELECT last_value FROM stations_id_seq)))
+        """)
         execute_values(cur, sql, values)
     conn.commit()
     print(f"  Upserted {len(stations)} stations")
