@@ -13,6 +13,7 @@ for f in tests/verify_*.py; do python3 "$f" || echo "FAILED: $f"; done
 | `verify_pipeline_structure.py` | `summarize()` math, lock/retry/publish wiring, validator SQL shape | no |
 | `verify_pipeline_ordering.py` | public path runs before backfill, time-box fallback (live 60s→2s test) | no |
 | `verify_insert_counts.py` | `insert_measurements()` returns true inserts, paging, S3-fallback trigger | temp table only |
+| `verify_gap_cap.py` | `MAX_INCREMENTAL_DAYS` clamp: small gaps unchanged, long outages saturate | no (reads only) |
 | `verify_validator_livedb.py` | full validate round-trip against real schema | seeds + deletes one sentinel row |
 
 ## What these exist to catch
@@ -44,6 +45,9 @@ country+date instead.
 - Weather/AOD enrichment costs 2 sequential Open-Meteo calls per row and the
   free tier throttles hard: ~10 rows/min. Bounded by `--max-enrich` (default
   300). Skipped rows stay NULL and retry — XGBoost handles NaN natively.
+- The live-API fallback re-fetches every day in the window across every
+  station, so `get_gap_days()` is clamped to `MAX_INCREMENTAL_DAYS` (7).
+  Without the clamp, a 6-day gap meant ~1h of work for IN's 748 stations.
 - macOS ships neither `timeout` nor `gtimeout`; the backfill time-box uses a
   background+kill fallback.
 - Backfill runs ~600 stations/hr and is checkpointed in
