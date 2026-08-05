@@ -15,7 +15,6 @@
 # NOTE: No `set -e` — individual steps use `|| echo WARNING` guards
 # so one failure doesn't halt the whole pipeline.
 
-LOG_FILE="/Users/divyanshailani/Desktop/pow-eda-pipeline/logs/cron.log"
 PIPELINE_DIR="/Users/divyanshailani/Desktop/pow-eda-pipeline"
 FRONTEND_DIR="/Users/divyanshailani/Desktop/global-aq-intelligence"
 LOCK_FILE="/tmp/global_aqi_pipeline.lock"
@@ -24,7 +23,11 @@ LOCK_FILE="/tmp/global_aqi_pipeline.lock"
 # mid-chunk is safe — the next run picks up where this one stopped.
 BACKFILL_MAX_MIN=90
 
-exec >> >(tee -a "$LOG_FILE") 2>&1
+# Logging is owned by the caller (crontab redirects to logs/cron.log).
+# Previously this line did `exec >> >(tee -a "$LOG_FILE") 2>&1`, which both
+# forked a second bash for the process substitution AND wrote every line
+# twice when the caller was already redirecting to the same file.
+# When run interactively, redirect yourself:  ./run_cron_local.sh >> logs/cron.log 2>&1
 
 # ── Run lock: never let two pipeline runs overlap on the same tables ──
 if [ -d "$LOCK_FILE" ]; then
