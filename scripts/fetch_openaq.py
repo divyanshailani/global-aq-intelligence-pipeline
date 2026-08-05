@@ -264,7 +264,16 @@ def run_fetch(country_code, days=None, date_from=None, date_to=None, resume=Fals
         "timestamp": datetime.now().isoformat(),
     }
 
-    print(f"\n  {country_name} complete: {completed} stations, {total_rows} rows inserted")
+    # 0 rows is not success: the S3 archive lags ~4 days and 404s are swallowed
+    # per-station, so the fetch "completes" having inserted nothing. Say so
+    # plainly here — the caller turns this into a live-API fallback.
+    if total_rows == 0:
+        print(
+            f"\n  {country_name} S3 MISS: {completed} stations scanned, 0 rows "
+            f"inserted (archive lag) — caller will fall back to live API"
+        )
+    else:
+        print(f"\n  {country_name} complete: {completed} stations, {total_rows} rows inserted")
     clear_checkpoint(country_code)
     conn.close()
 
