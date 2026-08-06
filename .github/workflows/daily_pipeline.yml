@@ -79,7 +79,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           echo 'Starting incremental collection'
-          python -u scripts/run_daily_collector.py --incremental-only
+          # Bound API stalls so a hosted runner cannot hold the production
+          # concurrency lock indefinitely. The next run resumes the window.
+          timeout --signal=TERM --kill-after=60s 90m \
+            python -u scripts/run_daily_collector.py --incremental-only
 
       - name: ETL (retry transient database failures)
         run: |
