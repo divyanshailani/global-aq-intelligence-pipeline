@@ -80,9 +80,21 @@ jobs:
           set -Eeuo pipefail
           echo 'Starting incremental collection'
           # Bound API stalls so a hosted runner cannot hold the production
-          # concurrency lock indefinitely. The next run resumes the window.
+          # concurrency lock indefinitely. The collector checkpoints completed
+          # station chunks, so the next run resumes the window.
+          set +e
           timeout --signal=TERM --kill-after=60s 20m \
             python -u scripts/run_daily_collector.py --incremental-only
+          rc=$?
+          set -e
+          if [[ "$rc" -eq 124 ]]; then
+            echo 'WARNING: collection hit the 20-minute budget; continuing with checkpointed progress'
+            echo 'ERROR: public-path collection is incomplete; refusing to run ETL/inference against partial freshness'
+            exit 124
+          elif [[ "$rc" -ne 0 ]]; then
+            echo "ERROR: incremental collection failed with exit code $rc"
+            exit "$rc"
+          fi
 
       - name: ETL (retry transient database failures)
         run: |

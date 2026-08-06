@@ -143,7 +143,10 @@ def run_incremental(countries, days=7):
             print(f"  {cc} S3 FETCH MISS: {e}. Initiating Fallback to legacy OpenAQ API...")
             try:
                 from scripts.legacy_api_fetcher import run_fetch as legacy_run_fetch
-                stats = legacy_run_fetch(cc, days=fetch_days)
+                # The live fallback is checkpointed in chunks.  Resume after a
+                # hosted-run time budget instead of restarting the country from
+                # station 1 on every Actions run.
+                stats = legacy_run_fetch(cc, days=fetch_days, resume=True)
                 api_rows = stats.get("rows_inserted", 0)
                 results[cc] = {"status": "success", "rows": api_rows, "source": "API_FALLBACK"}
                 print(f"  {cc} API FALLBACK SUCCESS: {api_rows} rows.")
@@ -200,7 +203,11 @@ def run_backfill(countries, chunk_days=90):
             print(f"  {cc} S3 BACKFILL FAILED: {e}. Initiating Fallback to legacy OpenAQ API...")
             try:
                 from scripts.legacy_api_fetcher import run_fetch as legacy_run_fetch
-                stats = legacy_run_fetch(cc, date_from=chunk_start, date_to=chunk_end)
+                # Backfill is also resumable: a runner can be terminated after
+                # a completed station chunk without losing that progress.
+                stats = legacy_run_fetch(
+                    cc, date_from=chunk_start, date_to=chunk_end, resume=True
+                )
                 results[cc] = {
                     "status": "success",
                     "chunk": f"{chunk_start} to {chunk_end}",
