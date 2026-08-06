@@ -101,7 +101,7 @@ class TestPredictionJSON:
 
     def test_site_data_json_shape(self):
         """Check existing site_data JSONs have the expected structure."""
-        site_data_dir = os.path.join(PROJECT_ROOT, "data", "site_data")
+        site_data_dir = os.path.join(PROJECT_ROOT, "site_data")
         if not os.path.exists(site_data_dir):
             return  # skip if no data generated yet
         
@@ -126,6 +126,17 @@ class TestPredictionJSON:
                     assert key in pred, f"{jf} prediction missing '{key}'"
                 assert any(key in pred for key in ("predicted_pm25", "mean_pm25")), \
                     f"{jf} prediction missing a PM2.5 value"
+
+    def test_publication_contract_is_explicit(self):
+        """The pipeline output and workflow publication paths must agree."""
+        from src.config import SITE_DATA_DIR
+
+        assert os.path.normpath(SITE_DATA_DIR) == os.path.normpath(os.path.join(PROJECT_ROOT, "site_data"))
+        workflow_path = os.path.join(PROJECT_ROOT, ".github", "workflows", "daily_pipeline.yml")
+        with open(workflow_path) as f:
+            workflow = f.read()
+        assert "files=(site_data/*.json)" in workflow
+        assert 'cp -f "${files[@]}" "$FRONTEND_DIR/public/data/"' in workflow
 
 
 # ─── Test 4: Config Module ───────────────────────────────────

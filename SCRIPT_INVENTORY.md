@@ -187,7 +187,37 @@ scripts/admin_dashboard.py -> predict_pipeline.py (manual admin action)
 | `fix_country_code.py` | UNKNOWN/MANUAL data repair helper; untracked |
 | `deploy_final.py`, `scripts/deploy_when_ready.py` | UNKNOWN/MANUAL deployment helpers; untracked |
 
-## 10. Remaining Support and Archive Files
+Additional tracked legacy and diagnostic scripts covered by the same classifications:
+
+```text
+old_scripts/fetch_open_meteo_aod.py
+old_scripts/fetch_openmeteo_all.py
+old_scripts/fetch_openmeteo_gb.py
+old_scripts/merge_openmeteo_all.py
+old_scripts/merge_openmeteo_gb.py
+scripts/auto_commit.sh
+scripts/backup_db.sh
+scripts/diagnostics/check_issues.py
+scripts/diagnostics/check_trials.py
+scripts/diagnostics/fast_etl.py
+scripts/diagnostics/rewrite_pipeline.py
+scripts/migrate_db_to_azure.sh
+```
+
+The `old_scripts/` entries are archived historical fetch/merge implementations. The diagnostics and shell entries are manual/deployment utilities; they remain in place until their operational owners and rollback procedures are separately verified.
+
+## 10. Scheduler Ownership Matrix
+
+| Publisher/path | Host | Output target | Status |
+| --- | --- | --- | --- |
+| `.github/workflows/daily_pipeline.yml` | GitHub-hosted runner | Pipeline `site_data/` to frontend `public/data/` | AUTHORITATIVE HOSTED DAILY PUBLISHER |
+| `scripts/run_cron_local.sh` | Local Mac | Pipeline `site_data/` to sibling frontend `public/data/` | ACTIVE LOCAL ALTERNATE; do not overlap |
+| `scripts/run_cron.sh` | Legacy VM candidate | VM checkout `site_data/` to frontend checkout | LEGACY CANDIDATE; verify scheduler before use/retirement |
+| `scripts/admin_dashboard.py` | Docker/systemd VM service | Manual legacy prediction path; API/admin operations | ACTIVE ADMIN ENTRYPOINT |
+
+The cleanup does not disable any publisher. Before changing scheduler state, record the host, scheduler definition, lock path, log path, last run, and replacement owner.
+
+## 11. Remaining Support and Archive Files
 
 These files are covered by the categories above but are listed explicitly so the inventory remains exhaustive:
 
@@ -195,6 +225,7 @@ These files are covered by the categories above but are listed explicitly so the
 | --- | --- |
 | `api/__init__.py`, `scripts/__init__.py`, `src/__init__.py` | PACKAGE MARKERS; required for imports/package behavior |
 | `src/evaluation.py` | ACTIVE SUPPORT LIBRARY for evaluation scripts |
+| `tests/test_repository_contract.py` | MAINTAINED STATIC REGRESSION GUARDS for repository and publication contracts |
 | `scripts/auto_collect.py` | MANUAL/LEGACY scheduler wrapper; current verification ensures it does not duplicate the collector |
 | `scripts/cleanup_prediction_log.py` | MANUAL DATA MAINTENANCE utility |
 | `scripts/diagnostics/check_db.py`, `check_issues.py`, `check_trials.py`, `fast_etl.py`, `rewrite_pipeline.py` | MANUAL/HISTORICAL diagnostics moved from repository root |
@@ -202,7 +233,7 @@ These files are covered by the categories above but are listed explicitly so the
 | `scratch/check_live_db.py`, `scratch/test_onnx_nan.py` | LOCAL EXPERIMENTS; not production or maintained pytest tests |
 | `check_db_health.py`, `check_db_health2.py`, `check_db_health_comprehensive.py`, `check_db_health_fast.py` | UNTRACKED MANUAL database checks; preserve until explicitly reviewed |
 
-## 11. Safe Rules
+## 12. Safe Rules
 
 - Only the four scripts in section 1 are the scheduled daily public pipeline.
 - `legacy_api_fetcher.py` is a production fallback despite its name.

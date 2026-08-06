@@ -46,7 +46,9 @@ if "azure" in db_host or "postgres.database.azure.com" in db_host:
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")
 MODEL_DIR = os.path.join(BASE_DIR, "models", "v5")
-SITE_DATA_DIR = os.path.join(BASE_DIR, "data", "site_data")
+# Root site_data/ is the authoritative staging directory for the V12
+# publisher and is copied to the separate frontend repository.
+SITE_DATA_DIR = os.path.join(BASE_DIR, "site_data")
 DATA_DIR = os.path.join(BASE_DIR, "data")
 
 # Frontend repo path (for deploy step)

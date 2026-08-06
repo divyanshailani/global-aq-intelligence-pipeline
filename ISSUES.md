@@ -74,7 +74,7 @@ Even after applying the Weather-Weighted Interpolator in the backend, the Next.j
 Next.js aggressively caches JSON in memory during `npm run dev`. To force Next.js to read the new thermodynamic data, we established a strict hard-reset protocol:
 1. Kill the server process (`kill -9 <PID>`).
 2. Destroy the cache directory (`rm -rf .next`).
-3. Ensure the prediction pipeline synced the JSON files directly to `global-aq-intelligence/public/data/site_data`.
+3. Ensure the prediction pipeline synced the JSON files directly to `global-aq-intelligence/public/data/`.
 4. Restart the dev server.
 
 ---

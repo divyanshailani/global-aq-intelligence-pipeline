@@ -218,7 +218,7 @@ python3 scripts/predict_v12_onnx.py
 python3 scripts/validate_predictions.py
 ```
 
-Output JSONs are written to `data/site_data/`. In GitHub Actions they are copied to the frontend repository and committed by the publish stage. The local `scripts/predict_pipeline.py` runner is retained for manual/legacy workflows and is not the scheduled production entrypoint.
+Output JSONs are written to the pipeline root `site_data/`. GitHub Actions copies those files to the separate frontend repository at `global-aq-intelligence/public/data/` and commits them during the publish stage. `data/site_data/` contains older tracked output and is not the current source of truth. The local `scripts/predict_pipeline.py` runner is retained for manual/legacy workflows and is not the scheduled production entrypoint.
 
 Weather and AOD enrichment is required by the V12 model. Do not remove or skip these features: `om_temperature`, `om_wind_speed`, `om_precipitation`, `om_aerosol_optical_depth`, `rolling_3day_precip`, and `aod_volatility_index` are part of the inference input contract.
 
