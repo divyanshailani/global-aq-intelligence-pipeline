@@ -17,7 +17,9 @@ try:
     from dotenv import load_dotenv
     env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
     if os.path.exists(env_path):
-        load_dotenv(env_path, override=True)
+        # CI injects secrets through the environment; those must take
+        # precedence over any local .env values.
+        load_dotenv(env_path, override=False)
 except ImportError:
     pass  # dotenv not installed, rely on system env vars
 

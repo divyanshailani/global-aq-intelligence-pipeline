@@ -105,7 +105,7 @@ class TestPredictionJSON:
         if not os.path.exists(site_data_dir):
             return  # skip if no data generated yet
         
-        json_files = glob.glob(os.path.join(site_data_dir, "*.json"))
+        json_files = glob.glob(os.path.join(site_data_dir, "predictions_*.json"))
         if not json_files:
             return  # skip if empty
         
@@ -115,14 +115,17 @@ class TestPredictionJSON:
             
             # Must have top-level keys
             assert "country" in data, f"{jf} missing 'country'"
-            assert "predictions" in data, f"{jf} missing 'predictions'"
+            predictions = data.get("predictions", data.get("forecast"))
+            assert predictions is not None, f"{jf} missing 'predictions' or 'forecast'"
             
             # Each prediction must have required fields
-            if data["predictions"]:
-                pred = data["predictions"][0]
-                required = ["target_date", "predicted_pm25", "horizon_days", "confidence"]
+            if predictions:
+                pred = predictions[0]
+                required = ["target_date", "horizon_days", "confidence"]
                 for key in required:
                     assert key in pred, f"{jf} prediction missing '{key}'"
+                assert any(key in pred for key in ("predicted_pm25", "mean_pm25")), \
+                    f"{jf} prediction missing a PM2.5 value"
 
 
 # ─── Test 4: Config Module ───────────────────────────────────
@@ -203,9 +206,11 @@ class TestModelMetadata:
         for mf in meta_files:
             with open(mf) as f:
                 data = json.load(f)
-            assert "features" in data, f"{mf} missing 'features' key"
-            assert isinstance(data["features"], list), f"{mf} features must be a list"
-            assert len(data["features"]) > 0, f"{mf} features list is empty"
+            metadata_entries = data.values() if isinstance(data, dict) and "features" not in data else [data]
+            for entry in metadata_entries:
+                assert "features" in entry, f"{mf} metadata entry missing 'features' key"
+                assert isinstance(entry["features"], list), f"{mf} features must be a list"
+                assert len(entry["features"]) > 0, f"{mf} features list is empty"
 
 
 # ─── Test 6: API v5 Alignment ────────────────────────────────

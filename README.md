@@ -5,7 +5,7 @@
 
 [📜 Read the full V12 Changelog & Architecture History here](CHANGELOG.md)
 
-> End-to-end PM2.5 forecasting engine for 4 countries. Autonomous daily pipeline: fetch → engineer → predict → sync.
+> End-to-end PM2.5 forecasting engine for 4 countries. The production job fetches data, engineers required weather/AOD features, predicts, validates, and publishes site data daily.
 
 **Stack:** Python · PostgreSQL · Parquet · XGBoost · Modal Serverless Grid · FastAPI
 
@@ -17,24 +17,27 @@
 
 ## What It Does
 
-Predicts PM2.5 air pollution for India, USA, UK, and Australia at 1-day, 7-day, 14-day, and 30-day horizons using native XGBoost with a Delta Target transformation, Zero Imputation, and no future weather injection.
+Predicts PM2.5 air pollution for India, USA, UK, and Australia at 1-day, 7-day, 14-day, and 30-day horizons using the V12 ONNX model grid with a Delta Target transformation, zero imputation, and no future weather injection.
 
-One command runs the full pipeline end-to-end:
+The scheduled production pipeline is deliberately split into bounded stages:
 
 ```bash
-python3 scripts/predict_pipeline.py
+python3 scripts/run_daily_collector.py --incremental-only
+python3 scripts/run_daily_etl.py --recent-days 5 --max-enrich 300
+python3 scripts/predict_v12_onnx.py
+python3 scripts/validate_predictions.py
 ```
 
-This fetches live sensor data, generates 30-day forecasts per station via Direct SQL Inference, exports static JSON, and automatically syncs to the Next.js frontend.
+GitHub Actions runs these stages from `.github/workflows/daily_pipeline.yml`, then publishes the generated JSON files to the frontend repository. Collection must complete before ETL, inference, validation, or publication can start. Each stage has bounded runtime and the workflow shares a concurrency lock with historical backfill.
 
 ---
 
 ## Architecture
 
 ```
-OpenAQ API ──┐
-NASA POWER ──┼──▶ PostgreSQL ──▶ V12 XGBoost (SQL Direct) ──▶ JSON Export ──▶ Next.js
-Open-Meteo ──┘                                                (site_data/)    (auto-sync)
+OpenAQ API ──▶ raw_measurements ──▶ cleaning/features ──▶ daily_features ──▶ V12 ONNX
+Open-Meteo ──▶ weather/AOD enrichment ────────────────────────────────────────┘
+NASA POWER ──▶ historical enrichment                         └──▶ site_data JSON ──▶ Next.js
 ```
 
 ### Model Architecture: V12 Challenger Pure Engine
@@ -135,7 +138,11 @@ We migrated to the V12 Challenger Pure Engine, marking the first honestly-evalua
 ```
 .
 ├── scripts/
-│   ├── predict_pipeline.py        # Main: fetch → predict → export → sync
+│   ├── run_daily_collector.py     # Production: bounded incremental collection
+│   ├── run_daily_etl.py           # Production: cleaning, features, weather/AOD
+│   ├── predict_v12_onnx.py        # Production: 16 ONNX models, 4 countries × 4 horizons
+│   ├── validate_predictions.py    # Production: output contract checks
+│   ├── predict_pipeline.py        # Legacy/manual end-to-end runner
 │   ├── train_v5.py                # Legacy chained GBR (baseline)
 │   ├── train_v6.py                # Direct multi-horizon (no future weather)
 │   ├── fetch_openaq.py            # Live sensor data
@@ -159,6 +166,7 @@ We migrated to the V12 Challenger Pure Engine, marking the first honestly-evalua
 ├── tests/
 │   ├── test_codex_fixes.py
 │   └── test_processing.py
+├── pytest.ini                     # Restricts discovery to tests/
 ├── ISSUES.md                      # Engineering log — 8 problems and how they were solved
 ├── requirements.txt
 └── .env.example
@@ -203,14 +211,16 @@ psql indiaaq < sql/schema.sql
 cp .env.example .env
 # Fill in DB credentials
 
-# 4. Run the full pipeline
-python3 scripts/predict_pipeline.py
-
-# 5. Skip fetch (use existing DB data)
-python3 scripts/predict_pipeline.py --skip-fetch
+# 4. Run the production stages locally
+python3 scripts/run_daily_collector.py --incremental-only
+python3 scripts/run_daily_etl.py --recent-days 5 --max-enrich 300
+python3 scripts/predict_v12_onnx.py
+python3 scripts/validate_predictions.py
 ```
 
-Output JSONs are written to `data/site_data/` and automatically synced to `../global-aq-intelligence/public/data/` if the frontend repo is present on the same machine.
+Output JSONs are written to `data/site_data/`. In GitHub Actions they are copied to the frontend repository and committed by the publish stage. The local `scripts/predict_pipeline.py` runner is retained for manual/legacy workflows and is not the scheduled production entrypoint.
+
+Weather and AOD enrichment is required by the V12 model. Do not remove or skip these features: `om_temperature`, `om_wind_speed`, `om_precipitation`, `om_aerosol_optical_depth`, `rolling_3day_precip`, and `aod_volatility_index` are part of the inference input contract.
 
 ---
 
