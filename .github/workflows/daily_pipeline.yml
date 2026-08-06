@@ -87,7 +87,7 @@ jobs:
           for attempt in 1 2 3 4 5; do
             echo "Collection attempt $attempt/5"
             set +e
-            timeout --signal=TERM --kill-after=60s 20m \\
+            timeout --signal=TERM --kill-after=60s 20m \
               python -u scripts/run_daily_collector.py --incremental-only
             rc=$?
             set -e
