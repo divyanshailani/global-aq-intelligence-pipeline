@@ -28,7 +28,7 @@ There are four distinct runtime paths:
 1. `.github/workflows/daily_pipeline.yml` is the current scheduled public-data publisher.
 2. `.github/workflows/historical_backfill.yml` reuses only the collector in `--backfill-only` mode.
 3. `scripts/deployment/run_cron_local.sh` is a separate local Mac scheduler that also publishes frontend data.
-4. `scripts/deployment/run_cron.sh` is a legacy VM scheduler candidate that must be checked against the VM's actual scheduler before use or retirement. `scripts/deployment/admin_dashboard.py` is the Docker/systemd admin API and can manually invoke the legacy prediction runner.
+4. `scripts/deployment/run_cron.sh` is a legacy VM scheduler candidate that must be checked against the VM's actual scheduler before use or retirement. `scripts/deployment/admin_dashboard.py` is the Docker/systemd admin API and invokes maintained V12 stages.
 
 The exact script classification is maintained in `SCRIPT_INVENTORY.md`. Do not infer that every script under `scripts/` is production or that every non-workflow script is dead.
 
@@ -41,19 +41,18 @@ GitHub Actions is the authoritative hosted daily publisher for the public fronte
 | Path | Role | Status |
 | --- | --- | --- |
 | `.github/workflows/` | Scheduled production and isolated backfill workflows | Active |
-| `scripts/` | Operational collectors, ETL, inference, validation, and data utilities | Mixed: active and historical tools |
-| `scripts/diagnostics/` | Manual database checks and one-off pipeline utilities | Manual / historical |
+| `scripts/` | Operational collectors, ETL, inference, validation, and data utilities | Active production code |
+| `scripts/archive/` | Historical, research, manual, and legacy material | Archived; never imported by production |
 | `src/` | Reusable cleaning, feature, aggregation, configuration, and evaluation code | Active library code |
 | `models/v12/` | Current ONNX production model grid | Active, do not delete |
-| `models/v5/`, `models/v6/`, `models/v9/`, `models/v9_4/`, `models/v11/` | Previous model generations and metadata | Historical reference |
+| `models/archive/` | Previous model generations and metadata | Archived reference |
 | `site_data/` | Authoritative JSON staging output copied to the frontend repository | Active output, do not delete |
 | `data/site_data/` | Older tracked JSON output location retained as historical evidence | Compatibility/reference; do not use as a new source |
 | `data/raw/`, `data/processed/` | Local/regenerable datasets | Local or generated |
 | `data/predictions_v12/` | Evaluation CSVs for model analysis | Historical evaluation artifacts |
 | `sql/` | Database schema and migrations | Active database definition |
 | `tests/` | Maintained pytest suite and structural verification | Active tests |
-| `notebooks/`, `plots/`, `reports/` | Exploratory analysis and presentation artifacts | Historical/reference |
-| `old_scripts/` | Retired data-fetching and merge scripts | Historical; do not use for daily production |
+| `scripts/archive/research/notebooks/`, `plots/archive/`, `reports/archive/` | Exploratory analysis and presentation artifacts | Historical/reference |
 | `backups/`, `logs/`, `scratch/`, `venv/` | Local backup, runtime, scratch, and environment files | Local-only; never commit |
 | `.agents/` | Local graph-memory database and generated graph views | Local-only; never commit |
 

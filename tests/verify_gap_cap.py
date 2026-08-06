@@ -14,9 +14,9 @@ import sys
 
 PIPE = "/Users/divyanshailani/Desktop/pow-eda-pipeline"
 sys.path.insert(0, PIPE)
-sys.path.insert(0, os.path.join(PIPE, "scripts"))
+sys.path.insert(0, PIPE)
 
-import run_daily_collector as rdc  # noqa: E402
+from scripts.pipeline import run_daily_collector as rdc  # noqa: E402
 
 fails, passes = [], []
 
@@ -32,7 +32,7 @@ CAP = rdc.MAX_INCREMENTAL_DAYS
 print("\n1. Cap constant")
 check("MAX_INCREMENTAL_DAYS defined", isinstance(CAP, int))
 check("cap is a useful size (2..31)", 2 <= CAP <= 31, f"got {CAP}")
-src = open(os.path.join(PIPE, "scripts", "run_daily_collector.py")).read()
+src = open(os.path.join(PIPE, "scripts", "pipeline", "run_daily_collector.py")).read()
 check("get_gap_days applies the cap via min()",
       "min(gap + 1, MAX_INCREMENTAL_DAYS)" in src)
 check("still floors at 1 day", "max(1, min(gap" in src)

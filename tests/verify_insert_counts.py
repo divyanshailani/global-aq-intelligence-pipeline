@@ -14,7 +14,7 @@ import sys
 
 PIPE = "/Users/divyanshailani/Desktop/pow-eda-pipeline"
 sys.path.insert(0, PIPE)
-sys.path.insert(0, os.path.join(PIPE, "scripts"))
+sys.path.insert(0, PIPE)
 
 import psycopg2  # noqa: E402
 from src.config import DB_CONFIG  # noqa: E402
@@ -27,7 +27,7 @@ def check(name, cond, detail=""):
     print(f"  [{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail and not cond else ""))
 
 
-spec = importlib.util.spec_from_file_location("fo", os.path.join(PIPE, "scripts", "fetch_openaq.py"))
+spec = importlib.util.spec_from_file_location("fo", os.path.join(PIPE, "scripts", "pipeline", "fetch_openaq.py"))
 fo = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fo)
 
@@ -97,7 +97,7 @@ conn.close()
 
 # ── 2. Fallback fires when S3 yields nothing ───────────────────────
 print("\n2. Zero-row S3 result triggers live-API fallback")
-src = open(os.path.join(PIPE, "scripts", "run_daily_collector.py")).read()
+src = open(os.path.join(PIPE, "scripts", "pipeline", "run_daily_collector.py")).read()
 check("zero-row S3 is treated as a miss", "s3_rows == 0" in src)
 check("raises to enter fallback branch", "S3 archive returned no rows" in src)
 check("fallback reports its own row count", "api_rows" in src)

@@ -19,6 +19,7 @@ These are the only Python stages called directly by `.github/workflows/daily_pip
 
 | Path | Role | Evidence |
 | --- | --- | --- |
+| `scripts/pipeline/__init__.py`, `scripts/operations/__init__.py`, `scripts/models/__init__.py`, `scripts/evaluation/__init__.py`, `scripts/deployment/__init__.py` | ACTIVE PACKAGE MARKERS | Keep categorized script directories importable as packages. |
 | `scripts/pipeline/run_daily_collector.py` | Incremental OpenAQ collection; also isolated historical backfill mode | Called by both daily and historical-backfill workflows |
 | `scripts/pipeline/run_daily_etl.py` | Cleaning, feature generation, weather/AOD enrichment | Called by daily workflow |
 | `scripts/pipeline/predict_v12_onnx.py` | V12 ONNX inference and site-data generation | Called by daily workflow |
@@ -58,12 +59,12 @@ These are active outside GitHub Actions and must be treated separately from the 
 | Path | Status | Meaning |
 | --- | --- | --- |
 | `scripts/deployment/run_cron_local.sh` | ACTIVE LOCAL SCHEDULER | Runs collection, ETL, V12 inference, validation, frontend publication, and time-boxed backfill on the Mac. It is a second publisher path, not a dead script. |
-| `scripts/deployment/admin_dashboard.py` | ACTIVE ADMIN/API ENTRYPOINT | Dockerfile and `scripts/deployment/setup_vm.sh` launch `uvicorn scripts.admin_dashboard:app`. It exposes admin controls and can manually launch the older `predict_pipeline.py`. |
+| `scripts/deployment/admin_dashboard.py` | ACTIVE ADMIN/API ENTRYPOINT | Dockerfile and `scripts/deployment/setup_vm.sh` launch `uvicorn scripts.deployment.admin_dashboard:app`. Its controls invoke maintained V12 pipeline stages. |
 | `scripts/deployment/setup_vm.sh` | DEPLOYMENT TOOL | Creates the systemd service for `admin_dashboard.py`; run only during VM provisioning or deliberate reconfiguration. |
-| `Dockerfile` / `docker-compose.yml` | ACTIVE DEPLOYMENT DEFINITION | The container entrypoint is `scripts.admin_dashboard:app`. |
+| `Dockerfile` / `docker-compose.yml` | ACTIVE DEPLOYMENT DEFINITION | The container entrypoint is the active admin dashboard module. |
 | `scripts/deployment/run_cron.sh` | LEGACY VM SCHEDULER CANDIDATE | It still runs V12 inference, but its flow differs from the current GitHub Actions workflow and lacks the current collection/ETL contract. Do not use it without confirming the VM's actual scheduler first. |
 
-Important: `api/main.py` is a separate FastAPI implementation and is not the Docker/systemd entrypoint currently declared in this repository. Treat it as an alternate/legacy API surface until the deployed service is independently checked.
+The retired alternate API is preserved under `scripts/archive/historical/api/` and is outside the production import path.
 
 ## 4. Maintained Tests and Verification
 
@@ -160,10 +161,10 @@ scripts/evaluation/test_h1_v11_aod.py
 scripts/evaluation/test_long_horizons.py
 src/evaluate_v12_pure.py
 src/v12_tuning.py
-notebooks/04-eda_full_scale.py
+scripts/archive/research/notebooks/04-eda_full_scale.py
 ```
 
-Keep these as historical research material for now. Do not run training or evaluation scripts against production databases without an explicit task and a backup/rollback plan.
+The active tree contains only maintained production and verification modules. Historical training/evaluation source is preserved under `scripts/archive/research/`; it is not imported or executed by production.
 
 ## 7. Legacy End-to-End Path
 
@@ -179,8 +180,9 @@ scripts/deployment/admin_dashboard.py -> predict_pipeline.py (manual admin actio
 
 | Path | Status |
 | --- | --- |
-| `old_scripts/` | ARCHIVED historical fetch/merge implementations |
-| `scripts/diagnostics/` | MANUAL diagnostics and one-off utilities moved from the repository root |
+| `scripts/archive/historical/fetchers/` | ARCHIVED historical fetch/merge implementations |
+| `scripts/archive/` | ARCHIVED historical, research, manual, and legacy material; excluded from production imports |
+| `scripts/deployment/` | ACTIVE deployment and admin entrypoints |
 | `scan_secrets.py` | MANUAL security scan; untracked |
 | `check_db_health*.py` | MANUAL database checks; untracked |
 | `query_db.py`, `test_query.py` | MANUAL local database probes; ignored/untracked state |
@@ -190,21 +192,21 @@ scripts/deployment/admin_dashboard.py -> predict_pipeline.py (manual admin actio
 Additional tracked legacy and diagnostic scripts covered by the same classifications:
 
 ```text
-old_scripts/fetch_open_meteo_aod.py
-old_scripts/fetch_openmeteo_all.py
-old_scripts/fetch_openmeteo_gb.py
-old_scripts/merge_openmeteo_all.py
-old_scripts/merge_openmeteo_gb.py
+scripts/archive/historical/fetchers/fetch_open_meteo_aod.py
+scripts/archive/historical/fetchers/fetch_openmeteo_all.py
+scripts/archive/historical/fetchers/fetch_openmeteo_gb.py
+scripts/archive/historical/fetchers/merge_openmeteo_all.py
+scripts/archive/historical/fetchers/merge_openmeteo_gb.py
 scripts/deployment/auto_commit.sh
 scripts/deployment/backup_db.sh
-scripts/diagnostics/check_issues.py
-scripts/diagnostics/check_trials.py
-scripts/diagnostics/fast_etl.py
-scripts/diagnostics/rewrite_pipeline.py
+scripts/archive/manual/diagnostics/check_issues.py
+scripts/archive/manual/diagnostics/check_trials.py
+scripts/archive/manual/diagnostics/fast_etl.py
+scripts/archive/manual/diagnostics/rewrite_pipeline.py
 scripts/deployment/migrate_db_to_azure.sh
 ```
 
-The `old_scripts/` entries are archived historical fetch/merge implementations. The diagnostics and shell entries are manual/deployment utilities; they remain in place until their operational owners and rollback procedures are separately verified.
+The historical fetchers and manual diagnostics are archived outside the active source tree. Deployment shell entries remain active only where their scheduler/deployment callers are documented.
 
 ## 10. Scheduler Ownership Matrix
 
@@ -228,8 +230,8 @@ These files are covered by the categories above but are listed explicitly so the
 | `tests/test_repository_contract.py` | MAINTAINED STATIC REGRESSION GUARDS for repository and publication contracts |
 | `scripts/deployment/auto_collect.py` | MANUAL/LEGACY scheduler wrapper; current verification ensures it does not duplicate the collector |
 | `scripts/operations/cleanup_prediction_log.py` | MANUAL DATA MAINTENANCE utility |
-| `scripts/diagnostics/check_db.py`, `check_issues.py`, `check_trials.py`, `fast_etl.py`, `rewrite_pipeline.py` | MANUAL/HISTORICAL diagnostics moved from repository root |
-| `old_scripts/fetch_nasa_power.py`, `fetch_open_meteo_aod.py`, `fetch_openmeteo_all.py`, `fetch_openmeteo_gb.py`, `merge_openmeteo_all.py`, `merge_openmeteo_gb.py` | ARCHIVED historical fetch/merge implementations; do not use for daily production |
+| `scripts/archive/manual/diagnostics/check_db.py`, `check_issues.py`, `check_trials.py`, `fast_etl.py`, `rewrite_pipeline.py` | MANUAL/HISTORICAL diagnostics preserved outside production |
+| `scripts/archive/historical/fetchers/fetch_nasa_power.py`, `fetch_open_meteo_aod.py`, `fetch_openmeteo_all.py`, `fetch_openmeteo_gb.py`, `merge_openmeteo_all.py`, `merge_openmeteo_gb.py` | ARCHIVED historical fetch/merge implementations; do not use for daily production |
 | `scratch/check_live_db.py`, `scratch/test_onnx_nan.py` | LOCAL EXPERIMENTS; not production or maintained pytest tests |
 | `check_db_health.py`, `check_db_health2.py`, `check_db_health_comprehensive.py`, `check_db_health_fast.py` | UNTRACKED MANUAL database checks; preserve until explicitly reviewed |
 

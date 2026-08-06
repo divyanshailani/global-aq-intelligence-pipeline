@@ -45,7 +45,7 @@ from src.config import DB_CONFIG
 # ─── Config ───────────────────────────────────────────────
 HORIZONS = [1, 7, 14, 30]
 COUNTRIES = ["IN", "US", "GB", "AU"]
-MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "models", "v7")  # Production
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "models", "v6")
 
 # v6 feature set — all backward-looking, zero leakage
 FEATURE_COLS_V6 = [
@@ -92,10 +92,10 @@ def load_country_features(conn, country_code):
 
 
 def get_available_features(df):
-    """Return v7 features that have >10% non-null coverage."""
+    """Return v6 features that have >10% non-null coverage."""
     available = []
     n = len(df)
-    for col in FEATURE_COLS_V6 + ["future_temp", "future_wind", "future_precip"]:
+    for col in FEATURE_COLS_V6:
         if col in df.columns:
             if df[col].notna().sum() / n > 0.10:
                 available.append(col)
@@ -106,32 +106,15 @@ def get_available_features(df):
 def make_horizon_target(df, horizon):
     """
     For each station, look exactly `horizon` calendar days ahead to create
-    the direct-horizon target and pull future weather features.
+    the direct-horizon target.
     """
     df_copy = df.copy()
     df_copy["date"] = pd.to_datetime(df_copy["date"])
     
-    # Grab target PM2.5 and Open-Meteo target weather
-    cols = ["station_id", "date", "value", "om_temperature", "om_wind_speed", "om_precipitation"]
-    
-    # Ensure columns exist (in case some countries lack them)
-    cols = [c for c in cols if c in df_copy.columns]
-    
-    target_df = df_copy[cols].copy()
-    target_df = target_df.rename(columns={
-        "date": "target_date", 
-        "value": f"target_h{horizon}",
-        "om_temperature": "future_temp",
-        "om_wind_speed": "future_wind",
-        "om_precipitation": "future_precip"
-    })
+    target_df = df_copy[["station_id", "date", "value"]].copy()
+    target_df = target_df.rename(columns={"date": "target_date", "value": f"target_h{horizon}"})
     
     df_copy["target_date"] = df_copy["date"] + pd.Timedelta(days=horizon)
-    
-    # Drop om_ columns from df_copy to prevent duplicates after merge
-    # (the future_ versions from target_df are the ones we want)
-    om_cols_to_drop = [c for c in ["om_temperature", "om_wind_speed", "om_precipitation"] if c in df_copy.columns]
-    df_copy = df_copy.drop(columns=om_cols_to_drop)
     
     result = pd.merge(df_copy, target_df, on=["station_id", "target_date"], how="inner")
     return result
@@ -217,9 +200,7 @@ def train_horizon_model(conn, country_code, horizon):
     medians = {}
     for col in features:
         med = X_train[col].median()
-        if hasattr(med, '__len__'):
-            med = med.iloc[0] if len(med) > 0 else 0.0
-        medians[col] = med if not (isinstance(med, float) and pd.isna(med)) else 0.0
+        medians[col] = med if not pd.isna(med) else 0.0
         X_train[col] = X_train[col].fillna(medians[col])
         X_test[col]  = X_test[col].fillna(medians[col])
 
@@ -265,7 +246,7 @@ def train_horizon_model(conn, country_code, horizon):
     meta = {
         "country":        country_code,
         "model":          "GradientBoostingRegressor",
-        "version":        "v7_weather_direct",
+        "version":        "v6",
         "horizon_days":   horizon,
         "features":       features,
         "feature_medians": medians,
@@ -358,7 +339,7 @@ def main():
     with open(combined_path, "w") as f:
         json.dump(all_meta, f, indent=2)
 
-    print(f"\n  Models  → models/v6/")
+    print(f"\n  Models  -> models/archive/v6/")
     print(f"  Metadata→ {combined_path}")
     conn.close()
 

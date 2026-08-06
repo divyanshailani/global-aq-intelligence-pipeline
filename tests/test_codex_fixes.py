@@ -164,7 +164,7 @@ class TestConfig:
 
     def test_no_hardcoded_creds_in_scripts(self):
         """Tracked code/docs should not carry hardcoded DB passwords or infra IDs."""
-        roots = ["scripts", "api", "src", "notebooks", ".github"]
+        roots = ["scripts", "src", ".github"]
         forbidden = [
             r"8765@@@",
             r"password=['\"]8765['\"]",
@@ -197,7 +197,7 @@ class TestModelMetadata:
 
     def test_model_meta_files_exist(self):
         """Each .pkl should have a matching _meta.json."""
-        model_dir = os.path.join(PROJECT_ROOT, "models", "v5")
+        model_dir = os.path.join(PROJECT_ROOT, "models", "v12")
         if not os.path.exists(model_dir):
             return  # skip if no models trained yet
         
@@ -209,7 +209,7 @@ class TestModelMetadata:
 
     def test_meta_has_features_list(self):
         """Metadata JSON must contain 'features' key."""
-        model_dir = os.path.join(PROJECT_ROOT, "models", "v5")
+        model_dir = os.path.join(PROJECT_ROOT, "models", "v12")
         if not os.path.exists(model_dir):
             return
         
@@ -222,27 +222,3 @@ class TestModelMetadata:
                 assert "features" in entry, f"{mf} metadata entry missing 'features' key"
                 assert isinstance(entry["features"], list), f"{mf} features must be a list"
                 assert len(entry["features"]) > 0, f"{mf} features list is empty"
-
-
-# ─── Test 6: API v5 Alignment ────────────────────────────────
-
-class TestAPIAlignment:
-    """Verify api/main.py serves v5, not v3."""
-
-    def test_api_references_v5(self):
-        api_path = os.path.join(PROJECT_ROOT, "api", "main.py")
-        with open(api_path) as f:
-            code = f.read()
-        
-        assert "v3" not in code.lower() or "v5" in code.lower(), \
-            "api/main.py still references v3 without v5"
-        assert "Global AQ Intelligence" in code, \
-            "api/main.py should reference Global AQ Intelligence, not IndiaAQ"
-
-    def test_api_no_hardcoded_model_path(self):
-        api_path = os.path.join(PROJECT_ROOT, "api", "main.py")
-        with open(api_path) as f:
-            code = f.read()
-        
-        assert "gb_pm25_v3" not in code, \
-            "api/main.py still loads old v3 model path"

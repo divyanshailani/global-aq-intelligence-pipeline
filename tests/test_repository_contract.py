@@ -51,7 +51,10 @@ def test_python_and_shell_inventory_covers_tracked_scripts():
     tracked = __import__("subprocess").check_output(
         ["git", "ls-files", "*.py", "*.sh"], cwd=ROOT, text=True
     ).splitlines()
-    missing = [path for path in tracked if path not in inventory]
+    missing = [
+        path for path in tracked
+        if path not in inventory and not path.startswith("scripts/archive/")
+    ]
     assert not missing, f"Unclassified tracked scripts: {missing}"
 
 

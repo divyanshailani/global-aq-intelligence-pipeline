@@ -8,7 +8,7 @@ This repository uses reversible organization only. Archive means a tracked `git 
 - Leave pre-existing untracked files untouched.
 - Do not archive a path referenced by workflows, imports, subprocess calls, Docker/systemd/launchd definitions, admin routes, tests, or deployment scripts.
 - Do not archive model generations until a versioned consumer manifest proves that the files have no current or recovery consumer.
-- Keep archive destinations versioned and explicit: `scripts/archive/manual/` or `scripts/archive/historical/`.
+- Keep archive destinations versioned and explicit: `scripts/archive/{historical,legacy,manual,research}/` and `models/archive/`.
 - Update `SCRIPT_INVENTORY.md`, documentation, and tests in the same commit as an approved move.
 
 ## Restore
@@ -23,4 +23,4 @@ Then rerun the reference scan, Python compilation, pytest collection/suite, and 
 
 ## Current status
 
-No additional utility is approved for movement in the current pass. The existing `scripts/diagnostics/` and `old_scripts/` locations are already documented archive boundaries. Unknown and untracked helpers remain in place pending separate review.
+Retired source, historical model generations, notebooks, plots, reports, diagnostics, and the alternate API are preserved under the archive boundaries above. Unknown and untracked helpers remain outside the production tree and are not part of the application contract.

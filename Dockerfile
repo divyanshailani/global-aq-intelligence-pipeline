@@ -20,4 +20,4 @@ COPY . .
 EXPOSE 8000
 
 # Start the FastAPI dashboard with 1 worker to preserve in-memory state
-CMD ["uvicorn", "scripts.admin_dashboard:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["uvicorn", "scripts.deployment.admin_dashboard:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

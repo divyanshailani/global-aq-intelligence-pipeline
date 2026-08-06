@@ -3,11 +3,11 @@ Global AQ Intelligence — Admin Control Panel
 ==============================================
 Local admin UI for the full data pipeline.
 
-4-Step Workflow:
+3-Step Workflow:
   STEP 1: Fetch Latest Data (OpenAQ + NASA POWER)
   STEP 2: Run 30-Day Predictions
   STEP 3: Push to GitHub → Vercel auto-deploys
-  STEP 4: Retrain Models (weekly, with R² guard)
+
 
 Usage:
     python scripts/deployment/admin_dashboard.py
@@ -81,7 +81,7 @@ async def require_admin_token(request: Request, call_next):
 # ─── Live pipeline state ─────────────────────────────────────
 pipeline_state = {
     "running": False,
-    "step": None,        # "fetch" | "predict" | "deploy" | "retrain"
+    "step": None,        # "fetch" | "predict" | "deploy" | "full"
     "logs": [],
     "result": None,      # "success" | "error"
     "started_at": None,
@@ -180,21 +180,16 @@ async def get_status():
 
         # ── Model metadata from JSON ──
         models = {}
-        v11_model_dir = os.path.join(BASE_DIR, "models", "v11")
-        v6_model_dir = os.path.join(BASE_DIR, "models", "v6")
-        # Try v11 first, fall back to v6
-        meta_file = os.path.join(v6_model_dir, "all_models_meta.json")
+        v12_model_dir = os.path.join(BASE_DIR, "models", "v12")
+        meta_file = os.path.join(v12_model_dir, "all_models_meta.json")
         if os.path.exists(meta_file):
             with open(meta_file) as f:
                 models = json.load(f)
 
-        # ── Last retrain date (check v11 XGBoost .json models) ──
+        # ── Last model update date ──
         last_retrain = None
-        model_search_dir = v11_model_dir if os.path.isdir(v11_model_dir) else v6_model_dir
         for cc in ["IN", "US", "GB", "AU"]:
-            model_file = os.path.join(model_search_dir, f"{cc}_pm25_h1_xgb.json")
-            if not os.path.exists(model_file):
-                model_file = os.path.join(v6_model_dir, f"{cc}_pm25_h1_gbr.pkl")
+            model_file = os.path.join(v12_model_dir, f"{cc}_pm25_h1_xgb.json")
             if os.path.exists(model_file):
                 mtime = datetime.fromtimestamp(os.path.getmtime(model_file))
                 if last_retrain is None or mtime > last_retrain:
@@ -288,7 +283,7 @@ def _run_fetch():
 
         add_log("Running incremental OpenAQ collector...")
         process = subprocess.Popen(
-            [sys.executable, "-u", os.path.join(SCRIPTS_DIR, "run_daily_collector.py"), "--incremental-only"],
+            [sys.executable, "-u", os.path.join(SCRIPTS_DIR, "pipeline", "run_daily_collector.py"), "--incremental-only"],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=BASE_DIR
         )
         for line in iter(process.stdout.readline, ""):
@@ -302,7 +297,7 @@ def _run_fetch():
 
         add_log("Running daily ETL pipeline (Cleaning, Features, Weather, AOD)...")
         process2 = subprocess.Popen(
-            [sys.executable, "-u", os.path.join(SCRIPTS_DIR, "run_daily_etl.py")],
+            [sys.executable, "-u", os.path.join(SCRIPTS_DIR, "pipeline", "run_daily_etl.py")],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=BASE_DIR
         )
         for line in iter(process2.stdout.readline, ""):
@@ -342,7 +337,7 @@ def _run_predict():
     try:
         add_log("═══ STEP 2: RUN 30-DAY PREDICTIONS ═══")
         process = subprocess.Popen(
-            [sys.executable, "-u", os.path.join(SCRIPTS_DIR, "predict_pipeline.py"), "--skip-fetch"],
+            [sys.executable, "-u", os.path.join(SCRIPTS_DIR, "pipeline", "predict_v12_onnx.py"), "--skip-fetch"],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=BASE_DIR
         )
         for line in iter(process.stdout.readline, ""):
@@ -443,50 +438,6 @@ def _run_deploy():
             pipeline_state["result"] = "error"
     except Exception as e:
         add_log(f"❌ DEPLOY FAILED: {e}")
-        pipeline_state["result"] = "error"
-    finally:
-        pipeline_state["running"] = False
-
-
-# ─── STEP 4: Retrain Models ──────────────────────────────────
-
-@app.post("/api/retrain")
-async def retrain(background_tasks: BackgroundTasks):
-    if pipeline_state["running"]:
-        return {"error": "Pipeline already running"}
-    pipeline_state["running"] = True
-    pipeline_state["step"] = "retrain"
-    pipeline_state["logs"] = []
-    pipeline_state["result"] = None
-    pipeline_state["started_at"] = datetime.now().isoformat()
-    background_tasks.add_task(_run_retrain)
-    return {"status": "started", "step": "retrain"}
-
-
-def _run_retrain():
-    try:
-        add_log("═══ STEP 4: RETRAIN MODELS ═══")
-        add_log("Running retrain_pipeline.py (Continuous Retraining Loop with R² guard)...")
-
-        process = subprocess.Popen(
-            [sys.executable, "-u", os.path.join(SCRIPTS_DIR, "retrain_pipeline.py")],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=BASE_DIR
-        )
-        for line in iter(process.stdout.readline, ""):
-            line = line.strip()
-            if line:
-                add_log(f"  {line}")
-        process.stdout.close()
-        return_code = process.wait()
-
-        if return_code == 0:
-            add_log("✅ RETRAIN COMPLETE — new models saved to models/v11/")
-            pipeline_state["result"] = "success"
-        else:
-            add_log(f"❌ Train error: Script exited with code {return_code}")
-            pipeline_state["result"] = "error"
-    except Exception as e:
-        add_log(f"❌ RETRAIN FAILED: {e}")
         pipeline_state["result"] = "error"
     finally:
         pipeline_state["running"] = False
@@ -712,7 +663,7 @@ ADMIN_HTML = """<!DOCTYPE html>
             </div>
         </div>
 
-        <!-- 4 Step Buttons -->
+        <!-- Pipeline controls -->
         <div class="grid-4">
             <div class="step-card">
                 <div class="step-num">Step 1</div>
@@ -732,12 +683,7 @@ ADMIN_HTML = """<!DOCTYPE html>
                 <div class="step-desc">Push JSON to GitHub<br>Vercel auto-deploys</div>
                 <button class="btn btn-green" id="deployBtn" onclick="runStep('deploy')">▶ Deploy</button>
             </div>
-            <div class="step-card">
-                <div class="step-num">Weekly</div>
-                <div class="step-title">🔄 Retrain</div>
-                <div class="step-desc">Full model retrain<br>with R² guard</div>
-                <button class="btn btn-amber" id="retrainBtn" onclick="runStep('retrain')">▶ Retrain</button>
-            </div>
+
         </div>
 
         <!-- Full Pipeline Button -->
