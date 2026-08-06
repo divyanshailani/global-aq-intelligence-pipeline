@@ -3,113 +3,211 @@ name: Global AQI Daily Pipeline
 on:
   schedule:
     - cron: '43 5 * * *'
-  workflow_dispatch: # Manual trigger still works for emergencies
+  workflow_dispatch:
+
+# Database writes and frontend publication must never overlap with backfill.
+concurrency:
+  group: global-aqi-production-database
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+  POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+  POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+  POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+  OPENAQ_KEYS: ${{ secrets.OPENAQ_KEYS }}
+  PYTHONUNBUFFERED: '1'
 
 jobs:
   run-daily-pipeline:
     runs-on: ubuntu-latest
-    
-    env:
-      # Database connection (Points to Azure Flexible PostgreSQL)
-      POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
-      POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
-      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-      
-      # API Keys
-      OPENAQ_KEYS: ${{ secrets.OPENAQ_KEYS }}
+    timeout-minutes: 120
 
     steps:
-      - name: 📥 Checkout Code
+      - name: Checkout pipeline
         uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python 3.11
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
+          cache: pip
 
-      - name: 📦 Install Dependencies
+      - name: Install dependencies
         run: |
+          set -Eeuo pipefail
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
 
-      - name: 🔍 Validate required secrets
+      - name: Validate secrets and database connectivity
         run: |
+          set -Eeuo pipefail
           required=(POSTGRES_HOST POSTGRES_PORT POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB OPENAQ_KEYS)
           for name in "${required[@]}"; do
-            if [ -z "${!name}" ]; then
-              echo "❌ $name is EMPTY"
+            if [[ -z "${!name:-}" ]]; then
+              echo "ERROR: $name is empty"
               exit 1
             fi
-            echo "✅ $name is set"
+            echo "OK: $name is set"
           done
-          echo "=== Quick DB connectivity test ==="
-          python -c "
-          import os
-          host = os.environ.get('POSTGRES_HOST', '').strip()
-          port = os.environ.get('POSTGRES_PORT', '').strip()
-          user = os.environ.get('POSTGRES_USER', '').strip()
-          db   = os.environ.get('POSTGRES_DB', '').strip()
-          import psycopg2
-          try:
-              conn = psycopg2.connect(
-                  host=host, port=int(port) if port else 5432,
-                  user=user, password=os.environ.get('POSTGRES_PASSWORD','').strip(),
-                  dbname=db, connect_timeout=10,
-                  sslmode='require'
-              )
-              cur = conn.cursor()
-              cur.execute('SELECT 1')
-              cur.fetchone()
-              print('✅ DB connected')
-              conn.close()
-          except Exception as e:
-              print('❌ DB connection failed')
-              raise
-          # Verify OPENAQ keys are clean
-          import re
-          raw = os.environ.get('OPENAQ_KEYS', '')
-          normalized = re.sub(r'[\r\n]+', ',', raw)
-          keys = [k.strip() for k in normalized.split(',') if k.strip()]
-          print(f'🔑 OPENAQ_KEYS: {len(keys)} keys found')
-          for i, k in enumerate(keys):
-              print(f'  Key {i+1}: format_ok={bool(k)}')
-          "
 
-      - name: 🌐 Step 1 - Fetch Latest OpenAQ & NASA POWER Data
+          python - <<'PY'
+          import os
+          import psycopg2
+
+          conn = psycopg2.connect(
+              host=os.environ["POSTGRES_HOST"].strip(),
+              port=int(os.environ["POSTGRES_PORT"].strip()),
+              user=os.environ["POSTGRES_USER"].strip(),
+              password=os.environ["POSTGRES_PASSWORD"].strip(),
+              dbname=os.environ["POSTGRES_DB"].strip(),
+              connect_timeout=15,
+              sslmode="require",
+          )
+          with conn:
+              with conn.cursor() as cur:
+                  cur.execute("SELECT 1, current_database(), now()")
+                  result = cur.fetchone()
+                  print(f"DB connected: database={result[1]}, server_time={result[2]}")
+          PY
+
+      - name: Incremental collection
         run: |
-          echo "Starting Data Collection..."
+          set -Eeuo pipefail
+          echo 'Starting incremental collection'
           python -u scripts/run_daily_collector.py --incremental-only
 
-      - name: 🧹 Step 1b - Run Daily ETL Pipeline
+      - name: ETL (retry transient database failures)
         run: |
-          echo "Starting Cleaning, Feature Engineering, and Weather Backfill..."
-          python -u scripts/run_daily_etl.py
+          set -Eeuo pipefail
+          succeeded=0
+          for attempt in 1 2 3; do
+            echo "ETL attempt $attempt/3"
+            if python -u scripts/run_daily_etl.py --recent-days 5 --max-enrich 300; then
+              echo "ETL succeeded on attempt $attempt"
+              succeeded=1
+              break
+            fi
+            echo "ETL attempt $attempt failed"
+            if [[ "$attempt" -lt 3 ]]; then
+              sleep 60
+            fi
+          done
+          [[ "$succeeded" -eq 1 ]] || { echo 'ERROR: ETL failed after 3 attempts'; exit 1; }
 
-      - name: 🧠 Step 2 - Run 30-Day V12 ONNX Predictions & Deploy
+      - name: Run V12 ONNX inference
+        run: |
+          set -Eeuo pipefail
+          python -u scripts/predict_v12_onnx.py
+
+      - name: Validate predictions
+        run: |
+          set -Eeuo pipefail
+          python -u scripts/validate_predictions.py
+
+      - name: Prepare frontend repository
         env:
           FRONTEND_PAT: ${{ secrets.FRONTEND_PAT }}
         run: |
-          echo "Cloning frontend repo to allow prediction sync..."
-          cd ..
-          git clone https://github.com/divyanshailani/global-aq-intelligence-web.git global-aq-intelligence-web
-          
-          # Go back to pipeline dir to run predictions
-          cd global-aq-intelligence-pipeline
-
-          echo "Running XGBoost V12 ONNX Models..."
-          python scripts/predict_v12_onnx.py
-          
-          echo "Pushing new predictions to the UI..."
-          # The script saves to site_data/ natively. Copy it manually just to be safe.
-          cp site_data/*.json ../global-aq-intelligence-web/public/data/
-          
-          cd ../global-aq-intelligence-web
-          git config user.name "Global AQI Bot"
-          git config user.email "bot@globalaqi.com"
+          set -Eeuo pipefail
+          [[ -n "${FRONTEND_PAT:-}" ]] || { echo 'ERROR: FRONTEND_PAT is empty'; exit 1; }
+          git clone https://github.com/divyanshailani/global-aq-intelligence-web.git "$RUNNER_TEMP/global-aq-intelligence-web"
+          cd "$RUNNER_TEMP/global-aq-intelligence-web"
+          git config user.name 'Global AQI Bot'
+          git config user.email 'bot@globalaqi.com'
           git remote set-url origin "https://x-access-token:${FRONTEND_PAT}@github.com/divyanshailani/global-aq-intelligence-web.git"
-          git add public/data/
-          git commit -m "auto: Daily V12 ONNX Predictions Update 🚀" || echo "No changes to commit"
-          git push
+
+      - name: Publish generated site data
+        env:
+          FRONTEND_DIR: ${{ runner.temp }}/global-aq-intelligence-web
+        run: |
+          set -Eeuo pipefail
+          shopt -s nullglob
+          files=(site_data/*.json)
+          [[ "${#files[@]}" -gt 0 ]] || { echo 'ERROR: no generated site_data JSON files'; exit 1; }
+          mkdir -p "$FRONTEND_DIR/public/data"
+          cp -f "${files[@]}" "$FRONTEND_DIR/public/data/"
+
+          cd "$FRONTEND_DIR"
+          git add public/data/*.json
+          if git diff --cached --quiet; then
+            echo 'No prediction changes to publish.'
+            exit 0
+          fi
+
+          git commit -m "auto: daily V12 predictions $(date -u +%Y-%m-%d)"
+
+          # Rebase after staging/committing, matching the proven local ordering.
+          # Generated JSON is authoritative if another run changed the same file.
+          for attempt in 1 2 3; do
+            if git pull --rebase origin main; then
+              break
+            fi
+            echo "Frontend rebase attempt $attempt failed"
+            git rebase --abort 2>/dev/null || true
+            git fetch origin main
+            git reset --soft origin/main
+            git add public/data/*.json
+            git commit -m "auto: daily V12 predictions $(date -u +%Y-%m-%d)" || true
+            [[ "$attempt" -lt 3 ]] && sleep 20
+          done
+
+          pushed=0
+          for attempt in 1 2 3; do
+            if git push origin main; then
+              pushed=1
+              break
+            fi
+            echo "Frontend push attempt $attempt failed; refreshing remote"
+            git pull --rebase origin main || true
+            [[ "$attempt" -lt 3 ]] && sleep 20
+          done
+          [[ "$pushed" -eq 1 ]] || { echo 'ERROR: frontend push failed after 3 attempts'; exit 1; }
+
+          local_sha=$(git rev-parse HEAD)
+          remote_sha=$(git ls-remote origin refs/heads/main | cut -f1)
+          [[ -n "$remote_sha" && "$local_sha" == "$remote_sha" ]] || {
+            echo "ERROR: remote verification failed (local=$local_sha remote=$remote_sha)"
+            exit 1
+          }
+          echo "Frontend published and verified at $remote_sha"
+
+      - name: Final database health check
+        if: ${{ success() }}
+        run: |
+          set -Eeuo pipefail
+          python - <<'PY'
+          import os
+          import psycopg2
+          conn = psycopg2.connect(
+              host=os.environ["POSTGRES_HOST"].strip(),
+              port=int(os.environ["POSTGRES_PORT"].strip()),
+              user=os.environ["POSTGRES_USER"].strip(),
+              password=os.environ["POSTGRES_PASSWORD"].strip(),
+              dbname=os.environ["POSTGRES_DB"].strip(),
+              connect_timeout=15,
+              sslmode="require",
+          )
+          with conn:
+              with conn.cursor() as cur:
+                  cur.execute("SELECT 1")
+                  assert cur.fetchone() == (1,)
+          print("Final DB health check passed")
+          PY
+
+      - name: Write run summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo '## Global AQI daily pipeline'
+            echo
+            echo "- Run: $GITHUB_RUN_ID"
+            echo "- Result: ${{ job.status }}"
+            echo "- Runner: $RUNNER_OS"
+            echo '- Public path: collection → ETL (3 retries) → inference → validation → frontend publish'
+            echo '- Historical backfill: intentionally separate; daily runner never blocks public data'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,115 @@
+name: Global AQI Historical Backfill
+
+on:
+  schedule:
+    - cron: '17 4 * * 0'
+  workflow_dispatch:
+
+# Share the database lock with the daily job; backfill must never mutate the
+# same production tables while the public pipeline is running.
+concurrency:
+  group: global-aqi-production-database
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+  POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+  POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+  POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+  OPENAQ_KEYS: ${{ secrets.OPENAQ_KEYS }}
+  PYTHONUNBUFFERED: '1'
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout pipeline
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -Eeuo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Validate secrets and database connectivity
+        run: |
+          set -Eeuo pipefail
+          required=(POSTGRES_HOST POSTGRES_PORT POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB OPENAQ_KEYS)
+          for name in "${required[@]}"; do
+            [[ -n "${!name:-}" ]] || { echo "ERROR: $name is empty"; exit 1; }
+          done
+          python - <<'PY'
+          import os
+          import psycopg2
+          conn = psycopg2.connect(
+              host=os.environ["POSTGRES_HOST"].strip(),
+              port=int(os.environ["POSTGRES_PORT"].strip()),
+              user=os.environ["POSTGRES_USER"].strip(),
+              password=os.environ["POSTGRES_PASSWORD"].strip(),
+              dbname=os.environ["POSTGRES_DB"].strip(),
+              connect_timeout=15,
+              sslmode="require",
+          )
+          with conn:
+              with conn.cursor() as cur:
+                  cur.execute("SELECT 1")
+                  assert cur.fetchone() == (1,)
+          print("DB connected")
+          PY
+
+      - name: Restore resumable backfill checkpoint
+        uses: actions/cache/restore@v4
+        with:
+          path: logs/backfill_state.json
+          key: global-aqi-backfill-${{ github.run_id }}
+          restore-keys: |
+            global-aqi-backfill-
+
+      - name: Run time-boxed backfill
+        run: |
+          set -Eeuo pipefail
+          mkdir -p logs
+          timeout --signal=TERM --kill-after=60s 90m \
+            python -u scripts/run_daily_collector.py --backfill-only
+
+      - name: Save resumable backfill checkpoint
+        if: ${{ always() }}
+        uses: actions/cache/save@v4
+        with:
+          path: logs/backfill_state.json
+          key: global-aqi-backfill-${{ github.run_id }}
+
+      - name: Final database health check
+        if: ${{ success() }}
+        run: |
+          set -Eeuo pipefail
+          python - <<'PY'
+          import os
+          import psycopg2
+          conn = psycopg2.connect(
+              host=os.environ["POSTGRES_HOST"].strip(),
+              port=int(os.environ["POSTGRES_PORT"].strip()),
+              user=os.environ["POSTGRES_USER"].strip(),
+              password=os.environ["POSTGRES_PASSWORD"].strip(),
+              dbname=os.environ["POSTGRES_DB"].strip(),
+              connect_timeout=15,
+              sslmode="require",
+          )
+          with conn:
+              with conn.cursor() as cur:
+                  cur.execute("SELECT 1")
+                  assert cur.fetchone() == (1,)
+          print("Final DB health check passed")
+          PY
