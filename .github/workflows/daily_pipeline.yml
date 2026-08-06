@@ -81,7 +81,7 @@ jobs:
           echo 'Starting incremental collection'
           # Bound API stalls so a hosted runner cannot hold the production
           # concurrency lock indefinitely. The next run resumes the window.
-          timeout --signal=TERM --kill-after=60s 90m \
+          timeout --signal=TERM --kill-after=60s 20m \
             python -u scripts/run_daily_collector.py --incremental-only
 
       - name: ETL (retry transient database failures)
