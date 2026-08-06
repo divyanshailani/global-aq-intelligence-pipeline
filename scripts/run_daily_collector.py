@@ -148,11 +148,17 @@ def run_incremental(countries, days=7):
                 # station 1 on every Actions run.
                 stats = legacy_run_fetch(cc, days=fetch_days, resume=True)
                 api_rows = stats.get("rows_inserted", 0)
+                if api_rows <= 0:
+                    raise RuntimeError("live API fallback returned zero rows")
                 results[cc] = {"status": "success", "rows": api_rows, "source": "API_FALLBACK"}
                 print(f"  {cc} API FALLBACK SUCCESS: {api_rows} rows.")
             except Exception as e2:
                 print(f"  {cc} API FALLBACK ALSO FAILED: {e2}")
                 results[cc] = {"status": "failed", "error": f"S3: {e} | API: {e2}"}
+
+    failed = [cc for cc, result in results.items() if result.get("status") == "failed"]
+    if failed:
+        raise RuntimeError(f"incremental collection failed for: {', '.join(failed)}")
 
     return results
 

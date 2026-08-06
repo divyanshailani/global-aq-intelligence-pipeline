@@ -79,38 +79,26 @@ jobs:
         run: |
           set -Eeuo pipefail
           echo 'Starting incremental collection'
-          # Each invocation is independently time-boxed. A timeout is expected
-          # for the live API fallback: completed station chunks are checkpointed
-          # and the next attempt resumes from that checkpoint. Do not continue
-          # to ETL until one invocation completes every country successfully.
-          completed=0
-          for attempt in 1 2 3 4 5; do
-            echo "Collection attempt $attempt/5"
-            set +e
-            timeout --signal=TERM --kill-after=60s 20m \
-              python -u scripts/run_daily_collector.py --incremental-only
-            rc=$?
-            set -e
+          # Keep the whole public-path collection step within one hard budget.
+          # Completed API chunks are checkpointed; the next scheduled run resumes
+          # them. Retrying the entire collector here can consume 5 x 20 minutes
+          # and repeatedly re-run slow S3 scans before ETL is reached.
+          set +e
+          timeout --signal=TERM --kill-after=60s 20m \
+            python -u scripts/run_daily_collector.py --incremental-only
+          rc=$?
+          set -e
 
-            if [[ "$rc" -eq 0 ]]; then
-              completed=1
-              echo "Incremental collection completed on attempt $attempt"
-              break
-            elif [[ "$rc" -eq 124 ]]; then
-              echo "WARNING: collection attempt $attempt hit the 20-minute budget"
-              echo 'Checkpointed progress will be resumed by the next attempt.'
-              [[ "$attempt" -lt 5 ]] && sleep 5
-            else
-              echo "ERROR: incremental collection failed with exit code $rc"
-              exit "$rc"
-            fi
-          done
-
-          if [[ "$completed" -ne 1 ]]; then
-            echo 'ERROR: incremental collection did not complete within 5 resumable attempts'
+          if [[ "$rc" -eq 124 ]]; then
+            echo 'ERROR: incremental collection hit the 20-minute budget'
+            echo 'Checkpointed progress will be resumed by the next scheduled run.'
             echo 'ETL/inference/publish are intentionally blocked because public-path freshness is incomplete.'
             exit 124
+          elif [[ "$rc" -ne 0 ]]; then
+            echo "ERROR: incremental collection failed with exit code $rc"
+            exit "$rc"
           fi
+          echo 'Incremental collection completed successfully'
 
       - name: ETL (retry transient database failures)
         run: |
