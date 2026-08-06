@@ -23,7 +23,13 @@ scripts/validate_predictions.py
  data/site_data/*.json -> frontend repository
 ```
 
-The scheduled implementation is `.github/workflows/daily_pipeline.yml`. Historical backfill is isolated in `.github/workflows/historical_backfill.yml`.
+There are three distinct runtime paths:
+
+1. `.github/workflows/daily_pipeline.yml` is the current scheduled public-data publisher.
+2. `.github/workflows/historical_backfill.yml` reuses only the collector in `--backfill-only` mode.
+3. `scripts/run_cron_local.sh` is a separate local scheduler that also publishes frontend data. `scripts/admin_dashboard.py` is the Docker/systemd admin API and can manually invoke the legacy prediction runner.
+
+The exact script classification is maintained in `SCRIPT_INVENTORY.md`. Do not infer that every script under `scripts/` is production or that every non-workflow script is dead.
 
 ## Directory Ownership
 
