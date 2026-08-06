@@ -57,7 +57,7 @@ class TestFeatureLeakage:
 
     def test_build_global_fixes_all_three_rolling(self):
         """build_global_features.py must fix roll_3_mean, roll_7_mean, AND roll_3_std."""
-        build_path = os.path.join(PROJECT_ROOT, "scripts", "build_global_features.py")
+        build_path = os.path.join(PROJECT_ROOT, "scripts", "operations", "build_global_features.py")
         with open(build_path) as f:
             code = f.read()
         

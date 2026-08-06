@@ -8,7 +8,7 @@ This project uses live cloud databases, API keys, and deployment automation. Tre
 - Keep `.env` permissions private: `chmod 600 .env`.
 - Store production secrets in GitHub Actions Secrets, Azure Key Vault, or the hosting provider secret manager.
 - Set `API_CORS_ORIGINS` to explicit frontend origins before deploying `api/main.py`.
-- Set `ADMIN_TOKEN` before exposing `scripts/admin_dashboard.py` beyond localhost.
+- Set `ADMIN_TOKEN` before exposing `scripts/deployment/admin_dashboard.py` beyond localhost.
 - Rotate credentials immediately if they were committed, pasted into logs, or shared with an AI tool.
 
 ## Current Required Secrets

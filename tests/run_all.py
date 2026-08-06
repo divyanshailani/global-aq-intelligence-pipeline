@@ -4,7 +4,7 @@
 The repo has no canonical test command, so verification lives in
 tests/verify_*.py. This runs all of them against the CURRENT workspace and
 aggregates the result, giving one fresh pass/fail signal for the changed
-collector code (scripts/run_daily_collector.py).
+collector code (scripts/pipeline/run_daily_collector.py).
 """
 import glob
 import os

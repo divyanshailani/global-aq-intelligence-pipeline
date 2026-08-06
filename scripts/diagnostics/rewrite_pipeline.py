@@ -1,6 +1,6 @@
 import re
 
-with open("/Users/divyanshailani/Desktop/pow-eda-pipeline/scripts/predict_pipeline.py", "r") as f:
+with open("/Users/divyanshailani/Desktop/pow-eda-pipeline/scripts/deployment/predict_pipeline.py", "r") as f:
     code = f.read()
 
 # 1. Remove predict_horizon
@@ -83,7 +83,7 @@ new_fill = """        # Ensure v7 features are populated
 
 code = code.replace(old_fill, new_fill)
 
-with open("/Users/divyanshailani/Desktop/pow-eda-pipeline/scripts/predict_pipeline.py", "w") as f:
+with open("/Users/divyanshailani/Desktop/pow-eda-pipeline/scripts/deployment/predict_pipeline.py", "w") as f:
     f.write(code)
 
 print("Rewrite complete.")

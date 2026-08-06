@@ -22,10 +22,10 @@ Predicts PM2.5 air pollution for India, USA, UK, and Australia at 1-day, 7-day, 
 The scheduled production pipeline is deliberately split into bounded stages:
 
 ```bash
-python3 scripts/run_daily_collector.py --incremental-only
-python3 scripts/run_daily_etl.py --recent-days 5 --max-enrich 300
-python3 scripts/predict_v12_onnx.py
-python3 scripts/validate_predictions.py
+python3 scripts/pipeline/run_daily_collector.py --incremental-only
+python3 scripts/pipeline/run_daily_etl.py --recent-days 5 --max-enrich 300
+python3 scripts/pipeline/predict_v12_onnx.py
+python3 scripts/pipeline/validate_predictions.py
 ```
 
 GitHub Actions runs these stages from `.github/workflows/daily_pipeline.yml`, then publishes the generated JSON files to the frontend repository. Collection must complete before ETL, inference, validation, or publication can start. Each stage has bounded runtime and the workflow shares a concurrency lock with historical backfill.
@@ -212,13 +212,13 @@ cp .env.example .env
 # Fill in DB credentials
 
 # 4. Run the production stages locally
-python3 scripts/run_daily_collector.py --incremental-only
-python3 scripts/run_daily_etl.py --recent-days 5 --max-enrich 300
-python3 scripts/predict_v12_onnx.py
-python3 scripts/validate_predictions.py
+python3 scripts/pipeline/run_daily_collector.py --incremental-only
+python3 scripts/pipeline/run_daily_etl.py --recent-days 5 --max-enrich 300
+python3 scripts/pipeline/predict_v12_onnx.py
+python3 scripts/pipeline/validate_predictions.py
 ```
 
-Output JSONs are written to the pipeline root `site_data/`. GitHub Actions copies those files to the separate frontend repository at `global-aq-intelligence/public/data/` and commits them during the publish stage. `data/site_data/` contains older tracked output and is not the current source of truth. The local `scripts/predict_pipeline.py` runner is retained for manual/legacy workflows and is not the scheduled production entrypoint.
+Output JSONs are written to the pipeline root `site_data/`. GitHub Actions copies those files to the separate frontend repository at `global-aq-intelligence/public/data/` and commits them during the publish stage. `data/site_data/` contains older tracked output and is not the current source of truth. The local `scripts/deployment/predict_pipeline.py` runner is retained for manual/legacy workflows and is not the scheduled production entrypoint.
 
 Weather and AOD enrichment is required by the V12 model. Do not remove or skip these features: `om_temperature`, `om_wind_speed`, `om_precipitation`, `om_aerosol_optical_depth`, `rolling_3day_precip`, and `aod_volatility_index` are part of the inference input contract.
 

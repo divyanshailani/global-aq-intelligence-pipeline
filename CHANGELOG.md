@@ -126,7 +126,7 @@ All notable changes to this project will be documented in this file.
 ### 🚀 Issues Tackled & System Upgrades
 - **The India Matrix Glitch (The 4 AM Washout)**: Investigated a massive MAE spike (25.96) in India on June 25th. Actual PM2.5 crashed from ~32 down to 14.61 due to monsoon rain, but the model blindly predicted a rise to 40.57.
 - **The Inference Blindspot**: First-principles analysis revealed that the XGBoost model was completely starved of weather data during live inference. The bulk data collectors (`fetch_openmeteo_all.py`, `fetch_nasa_power.py`) were hardcoded to historical bounds (ending mid-June) and `run_daily_etl.py` ONLY synced PM2.5 sensor data. Without precipitation features, the tree defaulted to its historical no-rain baseline.
-- **Database Healing (Targeted Backfill)**: Engineered and deployed `scripts/backfill_recent_weather.py` and `scripts/backfill_recent_aod.py` to surgically fetch OpenMeteo weather and AOD data for the missing June 21-25 gap, directly patching the `daily_features` table without triggering the massive historical backfill logic.
+- **Database Healing (Targeted Backfill)**: Engineered and deployed `scripts/operations/backfill_recent_weather.py` and `scripts/operations/backfill_recent_aod.py` to surgically fetch OpenMeteo weather and AOD data for the missing June 21-25 gap, directly patching the `daily_features` table without triggering the massive historical backfill logic.
 - **The "Hard Switch" Concept (is_raining_now)**: Validated a core architectural upgrade for the live pipeline: injecting a real-time binary flag (`is_raining_now = 1`) to explicitly override standard model paths and force the decision trees down the thermodynamic "Wet Scavenging" route instantly.
 
 ## [11.0.1] - Azure Production Resilience (ApiFallbackManager)
@@ -134,8 +134,8 @@ All notable changes to this project will be documented in this file.
 ### 🚀 Issues Tackled & System Upgrades
 - **Production ETL Resilience (Issue #17)**: Built `src/api_fallback_manager.py` — a centralized API defense layer with OpenAQ key rotation, exponential backoff & jitter for IP-based APIs, and a Final Kill Switch that only aborts when ALL fallback mechanisms are depleted.
 - **Old Script Quarantine**: Moved all legacy hardcoded fetch scripts into `old_scripts/` directory.
-- **New Resilient Fetchers**: Created `scripts/fetch_daily_weather.py` and `scripts/fetch_daily_aod.py` — both import and use the `ApiFallbackManager`.
-- **Orchestrator Rewrite**: Updated `scripts/run_daily_etl.py` with Atomic Transaction wrapping via `try...except RuntimeError`.
+- **New Resilient Fetchers**: Created `scripts/pipeline/fetch_daily_weather.py` and `scripts/pipeline/fetch_daily_aod.py` — both import and use the `ApiFallbackManager`.
+- **Orchestrator Rewrite**: Updated `scripts/pipeline/run_daily_etl.py` with Atomic Transaction wrapping via `try...except RuntimeError`.
 
 ## [11.0.0] - V11 3D Atmospheric Ensemble Active
 

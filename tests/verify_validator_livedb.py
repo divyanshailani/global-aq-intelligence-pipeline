@@ -69,7 +69,7 @@ try:
     # Run the real validator as a subprocess (exactly as cron invokes it).
     r = subprocess.run(
         [os.path.join(PIPE, "venv/bin/python3"),
-         os.path.join(PIPE, "scripts/validate_predictions.py")],
+         os.path.join(PIPE, "scripts/pipeline/validate_predictions.py")],
         capture_output=True, text=True, cwd=PIPE,
     )
     check("validator exited 0", r.returncode == 0, r.stderr[-300:])

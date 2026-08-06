@@ -69,7 +69,7 @@ id_rsa*
 CREDENTIALS.md
 
 # Admin (local-only, not for public repo)
-scripts/admin_dashboard.py
+scripts/deployment/admin_dashboard.py
 data/weather_openmeteo_*.csv
 
 # AI Agent memory

@@ -1,0 +1,1139 @@
+"""
+Global AQ Intelligence — Prediction Pipeline
+==============================================
+One-click pipeline: fetch → validate → predict → export JSON → sync frontend.
+
+Architecture: V11 3D Atmospheric Ensemble
+  - Anchor points (h1, h7, h14, h30) are direct XGBoost model outputs
+  - 3D AOD vectors from Copernicus CAMS fused with VIIRS spatial tracking
+  - GB horizons 14 & 30 dynamically route to V9 Baseline
+  - Future weather (Open-Meteo 16-day) injected per-station, per-date
+
+Usage:
+    python scripts/deployment/predict_pipeline.py              # full run
+    python scripts/deployment/predict_pipeline.py --skip-fetch  # skip data fetch, just predict
+"""
+
+import argparse
+import json
+import os
+import sys
+import time
+import requests
+import glob
+import uuid
+from datetime import datetime, timedelta, date
+from live_validation import run_live_validation
+
+import joblib
+import numpy as np
+import pandas as pd
+import psycopg2
+import xgboost as xgb
+import pandas as pd
+import psycopg2
+from psycopg2.extras import execute_values
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+from src.config import DB_CONFIG, MODEL_DIR as _MODEL_DIR, SITE_DATA_DIR
+
+MODEL_DIR = _MODEL_DIR
+V7_MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "models", "v7")  # Production
+V9_MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "models", "v9")  # XGBoost Production
+V9_4_MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "models", "v9_4")  # XGBoost V9.4
+V11_MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "models", "v11")  # XGBoost V11 AOD
+OUTPUT_DIR = SITE_DATA_DIR
+
+COUNTRIES = ["IN", "US", "GB", "AU"]
+ACTIVE_STATION_MAX_AGE_DAYS = 7
+RECENT_CONTEXT_DAYS = 14
+MIN_LIVE_VALIDATIONS = 100
+
+COUNTRY_META = {
+    "IN": {
+        "name": "India",
+        "flag": "🇮🇳",
+        "anchor": "Delhi",
+        "confidence": "high",
+        "tag": "High Confidence",
+        "tag_color": "green",
+        "reason": "Pending V11 Metadata Sync...",
+        "accuracy_percentage": 0.0,
+        "test_mae": 0.0,
+    },
+    "US": {
+        "name": "United States",
+        "flag": "🇺🇸",
+        "anchor": "Washington D.C.",
+        "confidence": "high",
+        "tag": "High Confidence",
+        "tag_color": "green",
+        "reason": "Pending V11 Metadata Sync...",
+        "accuracy_percentage": 0.0,
+        "test_mae": 0.0,
+    },
+    "GB": {
+        "name": "United Kingdom",
+        "flag": "🇬🇧",
+        "anchor": "London",
+        "confidence": "experimental",
+        "tag": "Experimental: Limited Seasonal Data",
+        "tag_color": "yellow",
+        "reason": "Pending V11 Metadata Sync...",
+        "accuracy_percentage": 0.0,
+        "test_mae": 0.0,
+    },
+    "AU": {
+        "name": "Australia",
+        "flag": "🇦🇺",
+        "anchor": "Canberra",
+        "confidence": "stable",
+        "tag": "Low Variance / Stable",
+        "tag_color": "blue",
+        "reason": "Pending V11 Metadata Sync...",
+        "accuracy_percentage": 0.0,
+        "test_mae": 0.0,
+    },
+}
+
+ANCHOR_STATIONS = {
+    "IN": 268,   # Delhi (ITO)
+    "US": 21026, # Washington D.C.
+    "GB": 16245, # London (Bloomsbury)
+    "AU": 18503  # Canberra (Civic)
+}
+
+
+def get_last_run_date(conn):
+    """Get the date of the last pipeline run."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT MAX(run_date) FROM pipeline_runs WHERE status = 'completed'")
+        result = cur.fetchone()[0]
+    return result.date() if result else None
+
+
+def ensure_tracking_schema(conn):
+    """Keep local tracking tables compatible with current metrics reporting."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            ALTER TABLE pipeline_runs
+                ADD COLUMN IF NOT EXISTS backtest_mae DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS backtest_r2 DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS metric_source TEXT,
+                ADD COLUMN IF NOT EXISTS metric_sample_count INTEGER
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_prediction_log_run_target
+                ON prediction_log (run_date, target_date, country_code)
+        """)
+    conn.commit()
+
+
+def validate_old_predictions(conn, run_id):
+    """
+    Compare old predictions (where target_date <= today and actual is NULL)
+    against real data that has arrived.
+    """
+    today = date.today()
+    validated = 0
+
+    with conn.cursor() as cur:
+        # Only validate plausible completed forecasts.
+        # target_date >= run_date quarantines old bad rows generated from stale
+        # station anchors (for example, a 2026 run forecasting from 2021 data).
+        cur.execute("""
+            SELECT pl.id, pl.station_id, pl.target_date, pl.predicted_value, pl.country_code
+            FROM prediction_log pl
+            WHERE pl.actual_value IS NULL
+              AND pl.target_date < %s
+              AND pl.target_date >= pl.run_date
+        """, (today,))
+        pending = cur.fetchall()
+
+        if pending:
+            print(f"  Found {len(pending)} predictions to validate...")
+        else:
+            print("  No predictions to validate")
+
+        for pid, station_id, target_date, predicted, cc in pending:
+            # Validate against daily_features, the same daily target table used
+            # for training and forecasting.
+            cur.execute("""
+                SELECT value FROM daily_features
+                WHERE station_id = %s
+                  AND parameter = 'pm25'
+                  AND date = %s
+                  AND value IS NOT NULL
+                LIMIT 1
+            """, (station_id, target_date))
+            result = cur.fetchone()
+            actual = result[0] if result and result[0] is not None else None
+
+            if actual is not None:
+                error = actual - predicted
+                cur.execute("""
+                    UPDATE prediction_log
+                    SET actual_value = %s, error = %s, validated_at = NOW()
+                    WHERE id = %s
+                """, (actual, error, pid))
+                validated += 1
+
+        conn.commit()
+
+        # Calculate live metrics only when the sample is large enough to trust.
+        cur.execute("""
+            SELECT actual_value, predicted_value
+            FROM prediction_log
+            WHERE actual_value IS NOT NULL
+              AND validated_at >= NOW() - INTERVAL '90 days'
+              AND target_date >= run_date
+        """)
+        rows = cur.fetchall()
+
+        live_sample_count = len(rows)
+        if live_sample_count >= MIN_LIVE_VALIDATIONS:
+            actuals = np.array([r[0] for r in rows])
+            preds = np.array([r[1] for r in rows])
+            live_mae = float(np.mean(np.abs(actuals - preds)))
+            mean_y = float(np.mean(actuals))
+            nmae = live_mae / mean_y if mean_y > 0 else 0
+            live_acc = max(0.0, (1.0 - nmae) * 100.0)
+        else:
+            live_mae = None
+            live_acc = None
+
+    print(f"  Validated: {validated}/{len(pending)}")
+    if live_mae is not None:
+        print(f"  Live MAE:  {live_mae:.2f} µg/m³")
+        print(f"  Live Acc:  {live_acc:.1f}%")
+    else:
+        print(f"  Live metrics hidden until {MIN_LIVE_VALIDATIONS}+ validations")
+
+    return validated, live_mae, live_acc, live_sample_count
+
+
+def backtest_recent(conn, n_days=7):
+    """
+    Backtest: predict the last N days of known data and compare to actuals.
+    Gives fresh accuracy metrics every run without waiting for future validation.
+    """
+    print(f"\n  Backtesting last {n_days} days against actuals...")
+    
+    all_actuals = []
+    all_preds = []
+    all_naives = []
+    country_metrics = {}
+
+    for cc in COUNTRIES:
+        meta_path = os.path.join(V11_MODEL_DIR, f"{cc}_pm25_h1_meta.json")
+        model_path = os.path.join(V11_MODEL_DIR, f"{cc}_pm25_h1_xgb.json")
+
+        if not os.path.exists(model_path):
+            continue
+
+        model = xgb.XGBRegressor()
+        model.load_model(model_path)
+        with open(meta_path) as f:
+            meta = json.load(f)
+        feature_cols = meta["features"]
+
+        # Recent one-step backtest: known actual rows, using already-built lag features.
+        sql = """
+            SELECT * FROM daily_features
+            WHERE country_code = %s
+              AND parameter = 'pm25'
+              AND value IS NOT NULL
+              AND lag_1 IS NOT NULL
+              AND date >= CURRENT_DATE - (%s * INTERVAL '1 day')
+            ORDER BY station_id, date
+        """
+        df = pd.read_sql(sql, conn, params=(cc, n_days + RECENT_CONTEXT_DAYS))
+        if df.empty or len(df) < 10:
+            continue
+
+        # Only predict rows from last N days (but use older rows for context)
+        cutoff = pd.Timestamp.now().normalize() - pd.Timedelta(days=n_days)
+        test_mask = pd.to_datetime(df["date"]) >= cutoff
+
+        # Ensure feature columns exist
+        available = [c for c in feature_cols if c in df.columns]
+        if not available:
+            continue
+
+        test_df = df[test_mask].copy()
+        if test_df.empty:
+            continue
+
+        # Ensure v7 features are populated
+        if "future_temp" in feature_cols:
+            test_df["future_temp"] = test_df.get("om_temperature", test_df.get("temperature", 0))
+        if "future_wind" in feature_cols:
+            test_df["future_wind"] = test_df.get("om_wind_speed", test_df.get("wind_speed", 0))
+        if "future_precip" in feature_cols:
+            test_df["future_precip"] = test_df.get("om_precipitation", test_df.get("precipitation", 0))
+
+        # Fill missing features with 0 and preserve training feature order.
+        for col in feature_cols:
+            if col not in test_df.columns:
+                test_df[col] = 0
+            test_df[col] = pd.to_numeric(test_df[col], errors="coerce").fillna(0)
+
+        X_test = test_df[feature_cols]
+        y_actual = test_df["value"].values
+
+        try:
+            y_pred = model.predict(X_test)
+        except Exception:
+            continue
+
+        mae = float(np.mean(np.abs(y_actual - y_pred)))
+        mean_y = float(np.mean(y_actual))
+        nmae = mae / mean_y if mean_y > 0 else 0
+        acc_pct = max(0.0, (1.0 - nmae) * 100.0)
+
+        # MASE Calculation
+        y_naive = test_df["lag_1"].values
+        naive_mae = float(np.mean(np.abs(y_actual - y_naive)))
+        mase = mae / naive_mae if naive_mae > 0 else 0
+        
+        COUNTRY_META[cc]["mase"] = round(mase, 2)
+
+        country_metrics[cc] = {
+            "accuracy_percentage": round(acc_pct, 1), 
+            "mae": round(mae, 2), 
+            "mase": round(mase, 2),
+            "n": len(y_actual)
+        }
+        all_actuals.extend(y_actual.tolist())
+        all_preds.extend(y_pred.tolist())
+        all_naives.extend(y_naive.tolist())
+
+        print(f"    {cc}: Acc={acc_pct:.1f}%  MAE={mae:.2f} µg/m³  MASE={mase:.2f}  ({len(y_actual)} samples)")
+
+    if all_actuals:
+        actuals = np.array(all_actuals)
+        preds = np.array(all_preds)
+        naives = np.array(all_naives)
+        
+        overall_mae = float(np.mean(np.abs(actuals - preds)))
+        mean_y_overall = float(np.mean(actuals))
+        overall_nmae = overall_mae / mean_y_overall if mean_y_overall > 0 else 0
+        overall_acc = max(0.0, (1.0 - overall_nmae) * 100.0)
+
+        overall_naive_mae = float(np.mean(np.abs(actuals - naives)))
+        overall_mase = overall_mae / overall_naive_mae if overall_naive_mae > 0 else 0
+
+        print(f"\n  📊 Backtest (last {n_days}d):")
+        print(f"     Overall Acc:  {overall_acc:.1f}%")
+        print(f"     Overall MAE:  {overall_mae:.2f} µg/m³")
+        print(f"     Overall MASE: {overall_mase:.2f}")
+        print(f"     Samples:      {len(actuals):,}")
+
+        return overall_mae, overall_acc, len(actuals), country_metrics
+    
+    return None, None, 0, {}
+
+
+def get_recent_features(conn, country_code, n_days=RECENT_CONTEXT_DAYS,
+                        active_days=ACTIVE_STATION_MAX_AGE_DAYS):
+    """Get recent context only for stations that are still active."""
+    sql = """
+        WITH active_stations AS (
+            SELECT station_id, MAX(date) AS last_date, COUNT(*) AS total_rows
+            FROM daily_features
+            WHERE country_code = %s
+              AND parameter = 'pm25'
+              AND value IS NOT NULL
+              AND lag_1 IS NOT NULL
+            GROUP BY station_id
+            HAVING MAX(date) >= CURRENT_DATE - (%s * INTERVAL '1 day')
+        ),
+        ranked AS (
+            SELECT df.*, a.last_date, a.total_rows,
+                   ROW_NUMBER() OVER (PARTITION BY df.station_id ORDER BY df.date DESC) as rn
+            FROM daily_features df
+            JOIN active_stations a ON a.station_id = df.station_id
+            WHERE df.country_code = %s
+              AND df.parameter = 'pm25'
+              AND df.value IS NOT NULL
+              AND df.lag_1 IS NOT NULL
+        )
+        SELECT * FROM ranked WHERE rn <= %s
+        ORDER BY station_id, date
+    """
+    return pd.read_sql(sql, conn, params=(country_code, active_days, country_code, n_days))
+
+
+
+
+
+def haversine_dist(lat1, lon1, lat2, lon2):
+    R = 6371.0
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+    dLat = lat2 - lat1
+    dLon = lon2 - lon1
+    a = np.sin(dLat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dLon/2)**2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    return R * c
+
+def load_latest_viirs_data(country_code):
+    try:
+        csv_files = glob.glob(os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "DL_FIRE_SV-C2_*", "fire_*.csv"))
+        viirs_list = []
+        bounds = {
+            "IN": (6, 38, 68, 98),
+            "US": (24, 50, -125, -66),
+            "GB": (49, 61, -9, 2),
+            "AU": (-44, -10, 112, 154)
+        }
+        min_lat, max_lat, min_lon, max_lon = bounds.get(country_code, (-90, 90, -180, 180))
+        
+        for f in csv_files:
+            v = pd.read_csv(f, usecols=["latitude", "longitude", "brightness", "acq_date"])
+            v = v[(v["latitude"] >= min_lat) & (v["latitude"] <= max_lat) & 
+                  (v["longitude"] >= min_lon) & (v["longitude"] <= max_lon)]
+            v = v.rename(columns={"latitude": "fire_lat", "longitude": "fire_lon"})
+            viirs_list.append(v)
+            
+        if viirs_list:
+            viirs = pd.concat(viirs_list, ignore_index=True)
+            viirs["acq_date"] = pd.to_datetime(viirs["acq_date"])
+            if not viirs.empty:
+                latest_date = viirs["acq_date"].max()
+                viirs = viirs[viirs["acq_date"] == latest_date]
+            return viirs
+        else:
+            return pd.DataFrame(columns=["fire_lat", "fire_lon", "brightness", "acq_date"])
+    except Exception as e:
+        print(f"Warning: Could not load viirs_data. Error: {e}")
+        return pd.DataFrame(columns=["fire_lat", "fire_lon", "brightness", "acq_date"])
+
+def load_latest_aod_data(lat, lon, station_id, conn):
+    """
+    Fetch yesterday's AOD data from Open-Meteo for the given lat/lon.
+    Fallback to historical median from DB if the API fails or returns NaN.
+    """
+    aod_mean, aod_max = 0.0, 0.0
+    try:
+        url = "https://air-quality-api.open-meteo.com/v1/air-quality"
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "hourly": ["aerosol_optical_depth"],
+            "past_days": 2,
+            "forecast_days": 0,
+            "timezone": "auto"
+        }
+        resp = requests.get(url, params=params, timeout=5)
+        resp.raise_for_status()
+        data = resp.json()
+        
+        yesterday_str = (date.today() - timedelta(days=1)).strftime('%Y-%m-%d')
+        
+        hourly = data.get("hourly", {})
+        times = hourly.get("time", [])
+        aods = hourly.get("aerosol_optical_depth", [])
+        
+        yesterday_aods = []
+        for t, val in zip(times, aods):
+            if t.startswith(yesterday_str) and val is not None:
+                yesterday_aods.append(val)
+                
+        if yesterday_aods:
+            aod_mean = float(np.mean(yesterday_aods))
+            aod_max = float(np.max(yesterday_aods))
+        else:
+            raise ValueError("No AOD data found for yesterday")
+            
+    except Exception as e:
+        print(f"      Warning: AOD live fetch failed for station {station_id} ({e}). Using DB fallback.")
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT aod_mean, aod_max 
+                    FROM satellite_aod_features 
+                    WHERE station_id = %s 
+                    ORDER BY date DESC LIMIT 1
+                """, (station_id,))
+                row = cur.fetchone()
+                if row:
+                    aod_mean, aod_max = row
+        except Exception as e2:
+            print(f"      Warning: AOD DB fallback failed for station {station_id} ({e2}).")
+            
+    return {"aod_mean_lag_1": aod_mean, "aod_max_lag_1": aod_max}
+
+
+def fetch_station_forecasts(stations_df):
+    """
+    Fetch 16-day Open-Meteo forecasts for a list of stations.
+    Returns: dict { station_id: { horizon_days: { 'temp': X, 'wind': Y, 'precip': Z } } }
+    """
+    forecasts = {}
+    print(f"    Fetching live 16-day weather forecasts for {len(stations_df)} stations...")
+    
+    for i, row in stations_df.iterrows():
+        sid = row['station_id']
+        lat = row.get('latitude', 0)
+        lon = row.get('longitude', 0)
+        
+        # Open-Meteo Forecast API
+        url = "https://api.open-meteo.com/v1/forecast"
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "daily": ["temperature_2m_mean", "wind_speed_10m_max", "precipitation_sum"],
+            "timezone": "auto",
+            "forecast_days": 16
+        }
+        
+        try:
+            resp = requests.get(url, params=params, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            daily = data.get("daily", {})
+            time_arr = daily.get("time", [])
+            temp_arr = daily.get("temperature_2m_mean", [])
+            wind_arr = daily.get("wind_speed_10m_max", [])
+            prec_arr = daily.get("precipitation_sum", [])
+            
+            station_forecast = {}
+            for j in range(len(time_arr)):
+                station_forecast[time_arr[j]] = {
+                    "temp": temp_arr[j] if temp_arr[j] is not None else 0,
+                    "wind": wind_arr[j] if wind_arr[j] is not None else 0,
+                    "precip": prec_arr[j] if prec_arr[j] is not None else 0
+                }
+            forecasts[sid] = station_forecast
+            time.sleep(0.1)
+        except Exception as e:
+            forecasts[sid] = {}
+            
+    return forecasts
+
+
+
+
+def predict_direct_ensemble(country_code, station_df, station_forecast, viirs_data, aod_data):
+    """
+    Dynamic Geospatial Ensemble Router
+    - GB @ h14, 30: Uses V9 Engine
+    - Otherwise: Uses V11 Engine (AOD + VIIRS)
+    """
+    direct = {}
+    last_row = station_df.iloc[-1].to_dict()
+    last_date = pd.to_datetime(last_row.get("date", date.today()))
+    
+    # Calculate climatology baseline for h=30
+    climatology_baseline = {}
+    for feat in ["temp", "wind", "precip"]:
+        valid_vals = [day_data[feat] for day, day_data in station_forecast.items() if day_data.get(feat) is not None]
+        climatology_baseline[feat] = np.mean(valid_vals) if valid_vals else 0
+        
+    for h in [1, 7, 14, 30]:
+        use_v9 = (country_code == 'GB' and h in [14, 30])
+        model_base_dir = V9_MODEL_DIR if use_v9 else V11_MODEL_DIR
+        
+        model_path = os.path.join(model_base_dir, f"{country_code}_pm25_h{h}_xgb.json")
+        meta_path  = os.path.join(model_base_dir, f"{country_code}_pm25_h{h}_meta.json")
+        
+        if not os.path.exists(model_path):
+            continue
+            
+        model = xgb.XGBRegressor()
+        model.load_model(model_path)
+        with open(meta_path) as f:
+            meta = json.load(f)
+        feat_cols = meta["features"]
+        medians   = meta.get("feature_medians", {})
+
+        row = {}
+        target_date = last_date + timedelta(days=h)
+        target_date_h_str = target_date.strftime('%Y-%m-%d')
+        
+        if use_v9:
+            for col in feat_cols:
+                if col == "future_temp":
+                    if h <= 15 and target_date_h_str in station_forecast:
+                        row[col] = station_forecast[target_date_h_str].get("temp", 0)
+                    else:
+                        row[col] = climatology_baseline["temp"]
+                elif col == "future_wind":
+                    if h <= 15 and target_date_h_str in station_forecast:
+                        row[col] = station_forecast[target_date_h_str].get("wind", 0)
+                    else:
+                        row[col] = climatology_baseline["wind"]
+                elif col == "future_precip":
+                    if h <= 15 and target_date_h_str in station_forecast:
+                        row[col] = station_forecast[target_date_h_str].get("precip", 0)
+                    else:
+                        row[col] = climatology_baseline["precip"]
+                elif col == f"pm25_lag_{h}":
+                    row[col] = last_row.get("value", 0)
+                elif col == "pm25_rolling_mean_3d":
+                    row[col] = last_row.get("roll_3_mean", 0)
+                elif col == "pm25_rolling_std_3d":
+                    row[col] = last_row.get("roll_3_std", 0)
+                else:
+                    val = last_row.get(col)
+                    row[col] = val if val is not None else medians.get(col, 0)
+        else:
+            for col in feat_cols:
+                if col == f"pm25_lag_{h}":
+                    row[col] = last_row.get("value", 0)
+                elif col == "pm25_ema_3d":
+                    row[col] = station_df["value"].ewm(span=3, adjust=False).mean().iloc[-1]
+                elif col == "month_sin":
+                    row[col] = np.sin(2 * np.pi * target_date.month / 12)
+                elif col == "month_cos":
+                    row[col] = np.cos(2 * np.pi * target_date.month / 12)
+                elif col == "day_of_year_sin":
+                    doy = target_date.timetuple().tm_yday
+                    row[col] = np.sin(2 * np.pi * doy / 365.25)
+                elif col == "day_of_year_cos":
+                    doy = target_date.timetuple().tm_yday
+                    row[col] = np.cos(2 * np.pi * doy / 365.25)
+                elif col == "future_temp":
+                    if h <= 15 and target_date_h_str in station_forecast:
+                        row[col] = station_forecast[target_date_h_str].get("temp", 0)
+                    else:
+                        row[col] = climatology_baseline["temp"]
+                elif col == "future_wind":
+                    if h <= 15 and target_date_h_str in station_forecast:
+                        row[col] = station_forecast[target_date_h_str].get("wind", 0)
+                    else:
+                        row[col] = climatology_baseline["wind"]
+                elif col == "future_precip":
+                    if h <= 15 and target_date_h_str in station_forecast:
+                        row[col] = station_forecast[target_date_h_str].get("precip", 0)
+                    else:
+                        row[col] = climatology_baseline["precip"]
+                elif col == "pm25_momentum":
+                    row[col] = last_row.get("value", 0) - last_row.get("lag_1", 0)
+                elif col == "future_temp_momentum":
+                    temp_h = station_forecast.get(target_date_h_str, {}).get("temp", 0) if h <= 15 else climatology_baseline.get("temp", 0)
+                    if h == 1:
+                        temp_prev = last_row.get("om_temperature", last_row.get("temperature", 0))
+                    else:
+                        target_prev_str = (target_date - timedelta(days=1)).strftime('%Y-%m-%d')
+                        temp_prev = station_forecast.get(target_prev_str, {}).get("temp", 0)
+                    row[col] = temp_h - temp_prev
+                elif col == "future_wind_momentum":
+                    wind_h = station_forecast.get(target_date_h_str, {}).get("wind", 0) if h <= 15 else climatology_baseline.get("wind", 0)
+                    if h == 1:
+                        wind_prev = last_row.get("om_wind_speed", last_row.get("wind_speed", 0))
+                    else:
+                        target_prev_str = (target_date - timedelta(days=1)).strftime('%Y-%m-%d')
+                        wind_prev = station_forecast.get(target_prev_str, {}).get("wind", 0)
+                    row[col] = wind_h - wind_prev
+                elif col == "fire_density_100km":
+                    row[col] = 0.0
+                    if not viirs_data.empty:
+                        dists = haversine_dist(last_row.get("latitude", 0), last_row.get("longitude", 0), viirs_data["fire_lat"].values, viirs_data["fire_lon"].values)
+                        mask = dists <= 100.0
+                        if np.any(mask):
+                            row[col] = float(np.sum(mask))
+                elif col == "fire_radiative_power_total":
+                    row[col] = 0.0
+                    if not viirs_data.empty:
+                        dists = haversine_dist(last_row.get("latitude", 0), last_row.get("longitude", 0), viirs_data["fire_lat"].values, viirs_data["fire_lon"].values)
+                        mask = dists <= 100.0
+                        if np.any(mask):
+                            row[col] = float(np.sum(viirs_data["brightness"].values[mask]))
+                elif col == "fire_wind_interaction":
+                    frp = 0.0
+                    if not viirs_data.empty:
+                        dists = haversine_dist(last_row.get("latitude", 0), last_row.get("longitude", 0), viirs_data["fire_lat"].values, viirs_data["fire_lon"].values)
+                        mask = dists <= 100.0
+                        if np.any(mask):
+                            frp = float(np.sum(viirs_data["brightness"].values[mask]))
+                    wind_h = station_forecast.get(target_date_h_str, {}).get("wind", 0) if h <= 15 else climatology_baseline.get("wind", 0)
+                    row[col] = frp * wind_h
+                elif col == "wind_u":
+                    wd = last_row.get("wind_direction")
+                    row[col] = np.cos(wd * np.pi / 180) if pd.notnull(wd) else medians.get(col, 0)
+                elif col == "wind_v":
+                    wd = last_row.get("wind_direction")
+                    row[col] = np.sin(wd * np.pi / 180) if pd.notnull(wd) else medians.get(col, 0)
+                elif col == "rolling_3day_precip":
+                    # Sum precipitation over the 3 days preceding target_date
+                    past_precip = []
+                    for d_idx in range(1, 4):
+                        d = target_date - timedelta(days=d_idx)
+                        d_str = d.strftime('%Y-%m-%d')
+                        if d > pd.to_datetime(last_row["date"]):
+                            # It's in the forecast future
+                            past_precip.append(station_forecast.get(d_str, {}).get("precip", 0))
+                        else:
+                            # It's in the historical dataframe
+                            hist = station_df[station_df["date"] == pd.to_datetime(d)]
+                            past_precip.append(hist["om_precipitation"].iloc[0] if not hist.empty else 0)
+                    row[col] = sum(past_precip)
+                elif col == "aod_volatility_index":
+                    # STD of AOD over the 7 days preceding target_date
+                    past_aod = []
+                    for d_idx in range(1, 8):
+                        d = target_date - timedelta(days=d_idx)
+                        hist = station_df[station_df["date"] == pd.to_datetime(d)]
+                        past_aod.append(hist["om_aerosol_optical_depth"].iloc[0] if not hist.empty else 0)
+                    row[col] = float(np.std(past_aod)) if past_aod else 0.0
+                elif col == "aod_mean_lag_1":
+                    row[col] = aod_data.get("aod_mean_lag_1", medians.get(col, 0))
+                elif col == "aod_max_lag_1":
+                    row[col] = aod_data.get("aod_max_lag_1", medians.get(col, 0))
+                else:
+                    val = last_row.get(col)
+                    row[col] = val if val is not None else medians.get(col, 0)
+
+        X = pd.DataFrame([row])[feat_cols]
+        X = X.apply(pd.to_numeric, errors="coerce")
+        for col in feat_cols:
+            if X[col].isna().any():
+                X[col] = X[col].fillna(medians.get(col, 0))
+        X = X.replace([np.inf, -np.inf], 0)
+
+        pred = float(model.predict(X)[0])
+        
+        if not use_v9:
+            pred = pred + last_row.get("value", 0)
+            
+        # ── PHASE 2: THE PHYSICS OVERRIDE (is_raining_now logic gate) ──
+        # If the 16-day Open-Meteo forecast predicts heavy rain, we explicitly force 
+        # the XGBoost engine down the "Wet Scavenging" thermodynamic path.
+        
+        # Removed heuristic physics override - model now natively understands rolling_3day_precip
+        
+        pred = max(0.0, pred)
+        direct[h] = pred
+
+    if not direct:
+        return None
+
+    # Interpolate for 1..30
+    predictions = []
+    
+    for day in range(1, 31):
+        target_date = last_date + timedelta(days=day)
+        
+        anchors = sorted(direct.keys())
+        if day in anchors:
+            pred = direct[day]
+        elif day < anchors[0]:
+            pred = direct[anchors[0]]
+        elif day > anchors[-1]:
+            pred = direct[anchors[-1]]
+        else:
+            left = max(a for a in anchors if a < day)
+            right = min(a for a in anchors if a > day)
+            weight = (day - left) / (right - left)
+            pred = direct[left] + weight * (direct[right] - direct[left])
+            
+        if day <= 7:
+            confidence = "high"
+            confidence_pct = max(70, 95 - (day - 1) * 3)
+        elif day <= 15:
+            confidence = "medium"
+            confidence_pct = max(50, 70 - (day - 7) * 2.5)
+        else:
+            confidence = "low"
+            confidence_pct = max(30, 50 - (day - 15) * 1.5)
+
+        target_date_str = target_date.strftime('%Y-%m-%d')
+        if day <= 15 and target_date_str in station_forecast:
+            temp = station_forecast[target_date_str].get("temp", 0)
+            wind = station_forecast[target_date_str].get("wind", 0)
+            precip = station_forecast[target_date_str].get("precip", 0)
+        else:
+            temp = climatology_baseline.get("temp", 0)
+            wind = climatology_baseline.get("wind", 0)
+            precip = climatology_baseline.get("precip", 0)
+
+        # Apply thermodynamic modifiers to intermediate days to create realistic variance
+        if day not in anchors:
+            # Removed heuristic physics override as models are now natively trained to handle washout
+            
+            pred = max(0.0, pred)
+
+        predictions.append({
+            "target_date": str(target_date.date()) if hasattr(target_date, 'date') else str(target_date),
+            "predicted_pm25": round(pred, 2),
+            "horizon_days": day,
+            "confidence": confidence,
+            "confidence_pct": round(confidence_pct),
+            "weather_context": {
+                "temp": round(float(temp), 1) if temp is not None else 0,
+                "wind": round(float(wind), 1) if wind is not None else 0,
+                "precip": round(float(precip), 2) if precip is not None else 0,
+            }
+        })
+
+    return predictions
+
+
+def run_predictions(conn, run_id):
+    all_predictions = {}
+    total_predictions = 0
+
+    for cc in COUNTRIES:
+        print(f"\n  {COUNTRY_META[cc]['flag']} {cc}: Generating V11 direct forecasts...")
+
+        # Get recent features only from active stations.
+        df = get_recent_features(conn, cc)
+        if df.empty:
+            print(f"    No active stations for {cc} in the last {ACTIVE_STATION_MAX_AGE_DAYS} days")
+            continue
+            
+        viirs = load_latest_viirs_data(cc)
+
+        # Prefer fresh stations first, then stations with enough context rows.
+        station_stats = (
+            df.groupby("station_id")
+            .agg(rows=("date", "size"), last_date=("date", "max"))
+            .sort_values(["last_date", "rows"], ascending=[False, False])
+        )
+        top_stations = station_stats.head(min(50, len(station_stats))).index.tolist()
+
+        anchor_id = ANCHOR_STATIONS.get(cc)
+        if anchor_id and anchor_id not in top_stations:
+            top_stations.append(anchor_id)
+
+        # Fetch lat/lon for the top stations
+        if not top_stations:
+            continue
+        
+        format_strings = ','.join(['%s'] * len(top_stations))
+        cur = conn.cursor()
+        cur.execute(f"SELECT id, latitude, longitude FROM stations WHERE id IN ({format_strings})", tuple(top_stations))
+        station_coords = pd.DataFrame(cur.fetchall(), columns=["station_id", "latitude", "longitude"])
+        cur.close()
+
+        # Fetch open meteo forecasts for these active stations
+        forecasts = fetch_station_forecasts(station_coords)
+
+        country_preds = []
+        for sid in top_stations:
+            station_df = df[df["station_id"] == sid].sort_values("date")
+            if station_df.empty:
+                continue
+            last_row = station_df.iloc[-1].to_dict()
+            last_data_date = pd.to_datetime(last_row["date"]).date()
+            if (date.today() - last_data_date).days > ACTIVE_STATION_MAX_AGE_DAYS:
+                continue
+
+            lat = float(station_coords[station_coords["station_id"] == sid]["latitude"].iloc[0])
+            lon = float(station_coords[station_coords["station_id"] == sid]["longitude"].iloc[0])
+            
+            aod_data = load_latest_aod_data(lat, lon, sid, conn)
+            station_forecast = forecasts.get(sid, {})
+            preds = predict_direct_ensemble(cc, station_df, station_forecast, viirs, aod_data)
+            if not preds:
+                continue
+            
+            preds = [
+                p for p in preds
+                if pd.to_datetime(p["target_date"]).date() >= date.today()
+            ]
+            if not preds:
+                continue
+
+            for p in preds:
+                p["station_id"] = int(sid)
+                p["country"] = cc
+
+            country_preds.extend(preds)
+
+            # Save to prediction_log
+            values = [(
+                str(run_id), date.today(), cc, int(sid),
+                p["target_date"], p["horizon_days"], p["predicted_pm25"]
+            ) for p in preds]
+
+            with conn.cursor() as cur:
+                execute_values(cur, """
+                    INSERT INTO prediction_log
+                        (run_id, run_date, country_code, station_id,
+                         target_date, horizon_days, predicted_value)
+                    VALUES %s
+                """, values)
+            conn.commit()
+
+        if not country_preds:
+            print(f"    No valid current/future forecasts for {cc}")
+            continue
+
+        # Extract weather components to columns so they can be aggregated
+        for p in country_preds:
+            if "weather_context" in p:
+                del p["weather_context"]
+
+        # Aggregate country-level forecast (mean of all stations)
+        preds_df = pd.DataFrame(country_preds)
+        daily_agg = preds_df.groupby(["target_date", "horizon_days", "confidence", "confidence_pct"]).agg(
+            mean_pm25=("predicted_pm25", "mean"),
+            min_pm25=("predicted_pm25", lambda x: np.percentile(x, 10)),
+            max_pm25=("predicted_pm25", lambda x: np.percentile(x, 90)),
+            stations=("station_id", "nunique"),
+        ).reset_index()
+
+        anchor_id = ANCHOR_STATIONS.get(cc)
+        anchor_weather = forecasts.get(anchor_id, {})
+
+        forecast_records = []
+        for r in daily_agg.to_dict(orient="records"):
+            target_date_str = r["target_date"]
+            day_weather = anchor_weather.get(target_date_str)
+            
+            if day_weather:
+                r["weather_context"] = {
+                    "temp": round(day_weather["temp"], 1),
+                    "wind": round(day_weather["wind"], 1),
+                    "precip": round(day_weather["precip"], 2)
+                }
+            forecast_records.append(r)
+
+        country_forecast = {
+            "country": cc,
+            "meta": {
+                **COUNTRY_META[cc],
+                "fire_count": len(viirs) if not viirs.empty else 0
+            },
+            "generated_at": datetime.now().isoformat(),
+            "last_data_date": str(df["date"].max()),
+            "forecast": forecast_records,
+            "station_count": len(top_stations),
+        }
+
+        all_predictions[cc] = country_forecast
+        total_predictions += len(country_preds)
+        print(f"    {len(top_stations)} stations × 30 days = {len(country_preds)} predictions")
+
+    return all_predictions, total_predictions
+
+
+def export_site_data(predictions, metric_mae, metric_acc, metric_source,
+                     metric_sample_count, live_validation_count):
+    """Export JSON files for the Vercel static site."""
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # Per-country prediction files
+    for cc, data in predictions.items():
+        path = os.path.join(OUTPUT_DIR, f"predictions_{cc}.json")
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
+
+    # Combined metadata
+    model_meta = {
+        "generated_at": datetime.now().isoformat(),
+        "model_version": "v11_xgboost_global",
+        "countries": {},
+        "accuracy": {
+            "mae": round(metric_mae, 2) if metric_mae is not None else None,
+            "accuracy_percentage": round(metric_acc, 1) if metric_acc is not None else None,
+            "source": metric_source,
+            "sample_count": metric_sample_count,
+            "live_validation_count": live_validation_count,
+            "note": (
+                "Live metrics require 100+ validated completed forecasts. "
+                "Backtest metrics are recent one-step checks against known actuals."
+            ),
+        }
+    }
+    for cc in COUNTRIES:
+        meta = COUNTRY_META[cc].copy()
+        if cc in predictions:
+            meta["station_count"] = predictions[cc]["station_count"]
+            meta["last_data_date"] = predictions[cc]["last_data_date"]
+            meta["forecast_days"] = 30
+        model_meta["countries"][cc] = meta
+
+    with open(os.path.join(OUTPUT_DIR, "model_meta.json"), "w") as f:
+        json.dump(model_meta, f, indent=2)
+
+    # Accuracy data for the proof section
+    accuracy = {
+        "generated_at": datetime.now().isoformat(),
+        "last_pipeline_run": datetime.now().isoformat(),
+        "mae": round(metric_mae, 2) if metric_mae is not None else None,
+        "accuracy_percentage": round(metric_acc, 1) if metric_acc is not None else None,
+        "source": metric_source,
+        "sample_count": metric_sample_count,
+        "live_validation_count": live_validation_count,
+        "training_metrics": {
+            cc: {
+                "accuracy_percentage": m.get("accuracy_percentage"), 
+                "mae": m.get("test_mae", m.get("mae")),
+                "mase": m.get("mase")
+            }
+            for cc, m in COUNTRY_META.items()
+        },
+        "confidence_explanation": {
+            "7_day": "Direct Horizon Anchors + Weather-Weighted Interpolation. Highest accuracy.",
+            "15_day": "Direct Horizon Anchors + Weather-Weighted Interpolation. Accuracy decreases.",
+            "30_day": "Direct Horizon Anchors + Weather-Weighted Interpolation. Treat as directional trend only.",
+        }
+    }
+    with open(os.path.join(OUTPUT_DIR, "accuracy.json"), "w") as f:
+        json.dump(accuracy, f, indent=2)
+
+    print(f"\n  Exported to {OUTPUT_DIR}/")
+    
+    # Sync to frontend
+    desktop_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    frontend_dir = os.path.join(desktop_dir, "global-aq-intelligence", "public", "data")
+    if os.path.exists(os.path.dirname(frontend_dir)):
+        import shutil
+        os.makedirs(frontend_dir, exist_ok=True)
+        shutil.copytree(OUTPUT_DIR, frontend_dir, dirs_exist_ok=True)
+        print(f"  Synced site_data to frontend repo at {frontend_dir}")
+    print(f"    predictions_IN.json, predictions_US.json, ...")
+    print(f"    model_meta.json, accuracy.json")
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--skip-fetch", action="store_true",
+                        help="Skip data fetching, just predict")
+    args = parser.parse_args()
+
+    start = time.time()
+    run_id = uuid.uuid4()
+    conn = psycopg2.connect(**DB_CONFIG)
+    ensure_tracking_schema(conn)
+
+    print("═" * 60)
+    print("  GLOBAL AQ INTELLIGENCE — PREDICTION PIPELINE")
+    print(f"  Run ID: {run_id}")
+    print(f"  Date:   {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print("═" * 60)
+
+    # Record run start
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO pipeline_runs (run_id, run_date, status)
+            VALUES (%s, NOW(), 'running')
+        """, (str(run_id),))
+    conn.commit()
+
+    # Dynamically update COUNTRY_META from V11 models
+    for cc in COUNTRIES:
+        meta_path = os.path.join(V11_MODEL_DIR, f"{cc}_pm25_h1_meta.json")
+        if os.path.exists(meta_path):
+            with open(meta_path, "r") as f:
+                meta = json.load(f)
+            metrics = meta.get("metrics", {})
+            acc = metrics.get("accuracy_percentage", 0)
+            mae = metrics.get("test_mae", 0)
+            COUNTRY_META[cc]["accuracy_percentage"] = acc
+            COUNTRY_META[cc]["test_mae"] = mae
+            if cc == "GB":
+                COUNTRY_META[cc]["reason"] = f"Accuracy={acc:.1f}%, V11 3D Atmospheric Ensemble (Long-Term: V9)"
+            else:
+                COUNTRY_META[cc]["reason"] = f"Accuracy={acc:.1f}%, V11 3D Atmospheric Ensemble"
+
+    # Phase 1: Check last run
+    last_run = get_last_run_date(conn)
+    gap_days = (date.today() - last_run).days if last_run else None
+    print(f"\n  Last run: {last_run or 'never'}")
+    if gap_days:
+        print(f"  Gap: {gap_days} days")
+
+    # Phase 2: Validate old predictions
+    print(f"\n{'─'*60}")
+    print("  Phase 1: Validate Old Predictions")
+    print(f"{'─'*60}")
+    validated, live_mae, live_acc, live_validation_count = validate_old_predictions(conn, run_id)
+
+    # Phase 3: Generate new predictions
+    print(f"\n{'─'*60}")
+    print("  Phase 2: Generate New Forecasts (7d + 15d + 30d)")
+    print(f"{'─'*60}")
+    predictions, total_preds = run_predictions(conn, run_id)
+
+    # Phase 3.5: Backtest — predict last 7 days vs actuals for fresh metrics
+    print(f"\n{'─'*60}")
+    print("  Phase 2.5: Backtest (Last 7 Days vs Actuals)")
+    print(f"{'─'*60}")
+    bt_mae, bt_acc, bt_sample_count, bt_country = backtest_recent(conn, n_days=7)
+
+    # Phase 3.75: Live Validation Observatory (Collision Engine)
+    print(f"\n{'─'*60}")
+    print("  Phase 2.75: Live Validation Observatory (Collision Engine)")
+    print(f"{'─'*60}")
+    live_validation_count = run_live_validation(conn)
+
+    # Phase 4: Export JSON for site
+    print(f"\n{'─'*60}")
+    print("  Phase 3: Export Site Data")
+    print(f"{'─'*60}")
+
+    # Priority: live validated > backtest > none, with source shown honestly.
+    if live_mae is not None:
+        display_mae = live_mae
+        display_acc = live_acc
+        metric_source = "live"
+        metric_sample_count = live_validation_count
+    elif bt_mae is not None:
+        display_mae = bt_mae
+        display_acc = bt_acc
+        metric_source = "backtest"
+        metric_sample_count = bt_sample_count
+    else:
+        display_mae = None
+        display_acc = None
+        metric_source = "none"
+        metric_sample_count = 0
+
+    export_site_data(
+        predictions,
+        display_mae,
+        display_acc,
+        metric_source,
+        metric_sample_count,
+        live_validation_count,
+    )
+
+    # Update run record
+    elapsed = time.time() - start
+
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE pipeline_runs SET
+                status = 'completed',
+                predictions_made = %s,
+                validations_done = %s,
+                live_mae = %s,
+                live_r2 = %s,
+                backtest_mae = %s,
+                backtest_r2 = %s,
+                metric_source = %s,
+                metric_sample_count = %s
+            WHERE run_id = %s
+        """, (
+            total_preds,
+            validated,
+            live_mae,
+            live_acc,
+            bt_mae,
+            bt_acc,
+            metric_source,
+            metric_sample_count,
+            str(run_id),
+        ))
+    conn.commit()
+
+    print(f"\n{'═'*60}")
+    print(f"  PIPELINE COMPLETE ({int(elapsed)}s)")
+    print(f"{'═'*60}")
+    print(f"  Predictions: {total_preds:,}")
+    print(f"  Validated:   {validated}")
+    if display_mae is not None:
+        label = {"live": "Live", "backtest": "Backtest", "none": ""}[metric_source]
+        print(f"  {label} MAE:  {display_mae:.2f} µg/m³")
+        print(f"  {label} Acc:   {display_acc:.1f}%")
+        print(f"  Samples:     {metric_sample_count:,}")
+
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()

@@ -8,16 +8,16 @@ This repository has one production purpose: predict AQI and publish the site's f
 OpenAQ / fallback APIs
         |
         v
-scripts/run_daily_collector.py --incremental-only
+scripts/pipeline/run_daily_collector.py --incremental-only
         |
         v
-scripts/run_daily_etl.py --recent-days 5 --max-enrich 300
+scripts/pipeline/run_daily_etl.py --recent-days 5 --max-enrich 300
         |  cleaning, features, weather and AOD enrichment
         v
-scripts/predict_v12_onnx.py
+scripts/pipeline/predict_v12_onnx.py
         |  16 ONNX models: 4 countries x 4 horizons
         v
-scripts/validate_predictions.py
+scripts/pipeline/validate_predictions.py
         |
         v
  site_data/*.json -> global-aq-intelligence/public/data/*.json
@@ -27,8 +27,8 @@ There are four distinct runtime paths:
 
 1. `.github/workflows/daily_pipeline.yml` is the current scheduled public-data publisher.
 2. `.github/workflows/historical_backfill.yml` reuses only the collector in `--backfill-only` mode.
-3. `scripts/run_cron_local.sh` is a separate local Mac scheduler that also publishes frontend data.
-4. `scripts/run_cron.sh` is a legacy VM scheduler candidate that must be checked against the VM's actual scheduler before use or retirement. `scripts/admin_dashboard.py` is the Docker/systemd admin API and can manually invoke the legacy prediction runner.
+3. `scripts/deployment/run_cron_local.sh` is a separate local Mac scheduler that also publishes frontend data.
+4. `scripts/deployment/run_cron.sh` is a legacy VM scheduler candidate that must be checked against the VM's actual scheduler before use or retirement. `scripts/deployment/admin_dashboard.py` is the Docker/systemd admin API and can manually invoke the legacy prediction runner.
 
 The exact script classification is maintained in `SCRIPT_INVENTORY.md`. Do not infer that every script under `scripts/` is production or that every non-workflow script is dead.
 
@@ -76,10 +76,10 @@ GitHub Actions is the authoritative hosted daily publisher for the public fronte
 ```bash
 python3 -m pytest -q
 python3 -m compileall -q scripts src tests
-python3 scripts/run_daily_collector.py --incremental-only
-python3 scripts/run_daily_etl.py --recent-days 5 --max-enrich 300
-python3 scripts/predict_v12_onnx.py
-python3 scripts/validate_predictions.py
+python3 scripts/pipeline/run_daily_collector.py --incremental-only
+python3 scripts/pipeline/run_daily_etl.py --recent-days 5 --max-enrich 300
+python3 scripts/pipeline/predict_v12_onnx.py
+python3 scripts/pipeline/validate_predictions.py
 ```
 
 The final four commands perform real data work. Run them only when an operational pipeline run is explicitly intended.

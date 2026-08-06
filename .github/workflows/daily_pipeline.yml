@@ -87,7 +87,7 @@ jobs:
           # and repeatedly re-run slow S3 scans before ETL is reached.
           set +e
           timeout --signal=TERM --kill-after=60s 20m \
-            python -u scripts/run_daily_collector.py --incremental-only
+            python -u scripts/pipeline/run_daily_collector.py --incremental-only
           rc=$?
           set -e
 
@@ -108,7 +108,7 @@ jobs:
           succeeded=0
           for attempt in 1 2 3; do
             echo "ETL attempt $attempt/3"
-            if python -u scripts/run_daily_etl.py --recent-days 5 --max-enrich 300; then
+            if python -u scripts/pipeline/run_daily_etl.py --recent-days 5 --max-enrich 300; then
               echo "ETL succeeded on attempt $attempt"
               succeeded=1
               break
@@ -123,12 +123,12 @@ jobs:
       - name: Run V12 ONNX inference
         run: |
           set -Eeuo pipefail
-          python -u scripts/predict_v12_onnx.py
+          python -u scripts/pipeline/predict_v12_onnx.py
 
       - name: Validate predictions
         run: |
           set -Eeuo pipefail
-          python -u scripts/validate_predictions.py
+          python -u scripts/pipeline/validate_predictions.py
 
       - name: Prepare frontend repository
         env:

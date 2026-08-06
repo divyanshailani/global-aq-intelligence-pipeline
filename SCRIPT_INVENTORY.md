@@ -19,10 +19,10 @@ These are the only Python stages called directly by `.github/workflows/daily_pip
 
 | Path | Role | Evidence |
 | --- | --- | --- |
-| `scripts/run_daily_collector.py` | Incremental OpenAQ collection; also isolated historical backfill mode | Called by both daily and historical-backfill workflows |
-| `scripts/run_daily_etl.py` | Cleaning, feature generation, weather/AOD enrichment | Called by daily workflow |
-| `scripts/predict_v12_onnx.py` | V12 ONNX inference and site-data generation | Called by daily workflow |
-| `scripts/validate_predictions.py` | Prediction contract and accuracy validation | Called by daily workflow |
+| `scripts/pipeline/run_daily_collector.py` | Incremental OpenAQ collection; also isolated historical backfill mode | Called by both daily and historical-backfill workflows |
+| `scripts/pipeline/run_daily_etl.py` | Cleaning, feature generation, weather/AOD enrichment | Called by daily workflow |
+| `scripts/pipeline/predict_v12_onnx.py` | V12 ONNX inference and site-data generation | Called by daily workflow |
+| `scripts/pipeline/validate_predictions.py` | Prediction contract and accuracy validation | Called by daily workflow |
 
 The production order is:
 
@@ -40,10 +40,10 @@ These are not top-level workflow stages, but moving or deleting them can break t
 
 | Path | Role | Evidence |
 | --- | --- | --- |
-| `scripts/fetch_openaq.py` | Primary S3/OpenAQ collection implementation | Imported by `run_daily_collector.py` |
-| `scripts/legacy_api_fetcher.py` | Live OpenAQ API fallback | Dynamically imported by `run_daily_collector.py` when S3 returns no rows or fails |
-| `scripts/fetch_daily_weather.py` | Daily weather fetch helper | Imported by `run_daily_etl.py` |
-| `scripts/fetch_daily_aod.py` | Daily AOD fetch helper | Imported by `run_daily_etl.py` |
+| `scripts/pipeline/fetch_openaq.py` | Primary S3/OpenAQ collection implementation | Imported by `run_daily_collector.py` |
+| `scripts/pipeline/legacy_api_fetcher.py` | Live OpenAQ API fallback | Dynamically imported by `run_daily_collector.py` when S3 returns no rows or fails |
+| `scripts/pipeline/fetch_daily_weather.py` | Daily weather fetch helper | Imported by `run_daily_etl.py` |
+| `scripts/pipeline/fetch_daily_aod.py` | Daily AOD fetch helper | Imported by `run_daily_etl.py` |
 | `src/config.py` | Environment, database, model, and output paths | Imported throughout active stages |
 | `src/cleaning.py` | Raw-to-clean measurement processing | Imported by `run_daily_etl.py` |
 | `src/features.py` | Feature and weather/AOD feature generation | Imported by `run_daily_etl.py` and inference-related code |
@@ -57,11 +57,11 @@ These are active outside GitHub Actions and must be treated separately from the 
 
 | Path | Status | Meaning |
 | --- | --- | --- |
-| `scripts/run_cron_local.sh` | ACTIVE LOCAL SCHEDULER | Runs collection, ETL, V12 inference, validation, frontend publication, and time-boxed backfill on the Mac. It is a second publisher path, not a dead script. |
-| `scripts/admin_dashboard.py` | ACTIVE ADMIN/API ENTRYPOINT | Dockerfile and `scripts/setup_vm.sh` launch `uvicorn scripts.admin_dashboard:app`. It exposes admin controls and can manually launch the older `predict_pipeline.py`. |
-| `scripts/setup_vm.sh` | DEPLOYMENT TOOL | Creates the systemd service for `admin_dashboard.py`; run only during VM provisioning or deliberate reconfiguration. |
+| `scripts/deployment/run_cron_local.sh` | ACTIVE LOCAL SCHEDULER | Runs collection, ETL, V12 inference, validation, frontend publication, and time-boxed backfill on the Mac. It is a second publisher path, not a dead script. |
+| `scripts/deployment/admin_dashboard.py` | ACTIVE ADMIN/API ENTRYPOINT | Dockerfile and `scripts/deployment/setup_vm.sh` launch `uvicorn scripts.admin_dashboard:app`. It exposes admin controls and can manually launch the older `predict_pipeline.py`. |
+| `scripts/deployment/setup_vm.sh` | DEPLOYMENT TOOL | Creates the systemd service for `admin_dashboard.py`; run only during VM provisioning or deliberate reconfiguration. |
 | `Dockerfile` / `docker-compose.yml` | ACTIVE DEPLOYMENT DEFINITION | The container entrypoint is `scripts.admin_dashboard:app`. |
-| `scripts/run_cron.sh` | LEGACY VM SCHEDULER CANDIDATE | It still runs V12 inference, but its flow differs from the current GitHub Actions workflow and lacks the current collection/ETL contract. Do not use it without confirming the VM's actual scheduler first. |
+| `scripts/deployment/run_cron.sh` | LEGACY VM SCHEDULER CANDIDATE | It still runs V12 inference, but its flow differs from the current GitHub Actions workflow and lacks the current collection/ETL contract. Do not use it without confirming the VM's actual scheduler first. |
 
 Important: `api/main.py` is a separate FastAPI implementation and is not the Docker/systemd entrypoint currently declared in this repository. Treat it as an alternate/legacy API surface until the deployed service is independently checked.
 
@@ -87,36 +87,36 @@ Pytest is intentionally restricted to `tests/` by `pytest.ini`. The verification
 These are purposeful operational tools, but no current scheduled workflow calls them directly:
 
 ```text
-scripts/backfill_aod_partitioned.py
-scripts/backfill_full_aod.py
-scripts/backfill_full_weather.py
-scripts/backfill_recent_aod.py
-scripts/backfill_recent_weather.py
+scripts/operations/backfill_aod_partitioned.py
+scripts/operations/backfill_full_aod.py
+scripts/operations/backfill_full_weather.py
+scripts/operations/backfill_recent_aod.py
+scripts/operations/backfill_recent_weather.py
 scripts/backfill_om_columns.py              # untracked local tool
-scripts/build_global_features.py
-scripts/bulk_backfill_local.py
-scripts/export_azure_to_parquet.py
-scripts/fetch_defra_bulk.py
-scripts/fetch_epa_bulk.py
-scripts/fetch_firms_fire.py
-scripts/fetch_nasa_global.py
-scripts/fetch_nasa_power_extra.py
-scripts/fetch_nsw_bulk.py
-scripts/fetch_openaq_india.py
-scripts/fetch_visual_crossing.py
-scripts/fetch_weather.py
-scripts/ingest_openaq.py
-scripts/ingest_openaq_data.py
+scripts/operations/build_global_features.py
+scripts/operations/bulk_backfill_local.py
+scripts/operations/export_azure_to_parquet.py
+scripts/operations/fetch_defra_bulk.py
+scripts/operations/fetch_epa_bulk.py
+scripts/operations/fetch_firms_fire.py
+scripts/operations/fetch_nasa_global.py
+scripts/operations/fetch_nasa_power_extra.py
+scripts/operations/fetch_nsw_bulk.py
+scripts/operations/fetch_openaq_india.py
+scripts/operations/fetch_visual_crossing.py
+scripts/operations/fetch_weather.py
+scripts/operations/ingest_openaq.py
+scripts/operations/ingest_openaq_data.py
 scripts/load_daily_features_to_acc2.py   # untracked local tool
 scripts/load_missing_clean_measurements.py # untracked local tool
-scripts/merge_nasa_fire.py
-scripts/patch_weather_batch.py
-scripts/patch_weather_standalone.py
-scripts/process_firms_fire.py
-scripts/process_firms_global.py
+scripts/operations/merge_nasa_fire.py
+scripts/operations/patch_weather_batch.py
+scripts/operations/patch_weather_standalone.py
+scripts/operations/process_firms_fire.py
+scripts/operations/process_firms_global.py
 scripts/rebuild_daily_features_acc2.py   # untracked local tool
-scripts/swarm_weather_fetch.py
-scripts/update_db_nasa_weather.py
+scripts/operations/swarm_weather_fetch.py
+scripts/operations/update_db_nasa_weather.py
 ```
 
 These can write to databases or regenerate data. They should remain in place until each one has an owner, command contract, and rollback note.
@@ -126,38 +126,38 @@ These can write to databases or regenerate data. They should remain in place unt
 These are not part of current V12 daily inference. Their versioned names and imports point to older model generations or research workflows:
 
 ```text
-scripts/train_v5.py
-scripts/train_v6.py
-scripts/train_v7_experiment.py
-scripts/train_v8_experiment.py
-scripts/train_v9_xgboost.py
-scripts/train_v9_4_xgboost.py
-scripts/train_v11_aod_global.py
-scripts/train_full_v11.py
-scripts/tune_v11_per_country.py
-scripts/optimize_h1_optuna.py
-scripts/train_tri_engine_standoff.py
-scripts/train_models.py
-scripts/retrain_pipeline.py
-scripts/convert_models_to_onnx.py
-scripts/evaluate_v11_vs_v12.py
-scripts/evaluate_v12_only.py
-scripts/calc_metrics.py
-scripts/calc_metrics_blind.py
-scripts/live_validation.py
-scripts/revalidate_june21.py
-scripts/v9_4_error_autopsy.py
-scripts/plot_2x2_grid.py
-scripts/plot_evaluation.py
-scripts/plot_v9_forecasts.py
-scripts/plot_v9_4_forecasts.py
-scripts/plot_v11_forecasts.py
-scripts/test_anomaly_june25.py
-scripts/test_forecast.py
-scripts/test_h1_microphysics.py
-scripts/test_h1_v10_extremes.py
-scripts/test_h1_v11_aod.py
-scripts/test_long_horizons.py
+scripts/models/train_v5.py
+scripts/models/train_v6.py
+scripts/models/train_v7_experiment.py
+scripts/models/train_v8_experiment.py
+scripts/models/train_v9_xgboost.py
+scripts/models/train_v9_4_xgboost.py
+scripts/models/train_v11_aod_global.py
+scripts/models/train_full_v11.py
+scripts/models/tune_v11_per_country.py
+scripts/models/optimize_h1_optuna.py
+scripts/models/train_tri_engine_standoff.py
+scripts/models/train_models.py
+scripts/deployment/retrain_pipeline.py
+scripts/models/convert_models_to_onnx.py
+scripts/evaluation/evaluate_v11_vs_v12.py
+scripts/evaluation/evaluate_v12_only.py
+scripts/evaluation/calc_metrics.py
+scripts/evaluation/calc_metrics_blind.py
+scripts/evaluation/live_validation.py
+scripts/evaluation/revalidate_june21.py
+scripts/evaluation/v9_4_error_autopsy.py
+scripts/evaluation/plot_2x2_grid.py
+scripts/evaluation/plot_evaluation.py
+scripts/evaluation/plot_v9_forecasts.py
+scripts/evaluation/plot_v9_4_forecasts.py
+scripts/evaluation/plot_v11_forecasts.py
+scripts/evaluation/test_anomaly_june25.py
+scripts/evaluation/test_forecast.py
+scripts/evaluation/test_h1_microphysics.py
+scripts/evaluation/test_h1_v10_extremes.py
+scripts/evaluation/test_h1_v11_aod.py
+scripts/evaluation/test_long_horizons.py
 src/evaluate_v12_pure.py
 src/v12_tuning.py
 notebooks/04-eda_full_scale.py
@@ -168,9 +168,9 @@ Keep these as historical research material for now. Do not run training or evalu
 ## 7. Legacy End-to-End Path
 
 ```text
-scripts/predict_pipeline.py
-scripts/retrain_pipeline.py
-scripts/admin_dashboard.py -> predict_pipeline.py (manual admin action)
+scripts/deployment/predict_pipeline.py
+scripts/models/retrain_pipeline.py
+scripts/deployment/admin_dashboard.py -> predict_pipeline.py (manual admin action)
 ```
 
 `predict_pipeline.py` is not used by either current GitHub Actions workflow and is not the V12 scheduled inference stage. It remains reachable through the admin dashboard and historical scripts, so it must not be deleted casually. Treat it as `LEGACY MANUAL`, not `CURRENT PRODUCTION`.
@@ -195,13 +195,13 @@ old_scripts/fetch_openmeteo_all.py
 old_scripts/fetch_openmeteo_gb.py
 old_scripts/merge_openmeteo_all.py
 old_scripts/merge_openmeteo_gb.py
-scripts/auto_commit.sh
-scripts/backup_db.sh
+scripts/deployment/auto_commit.sh
+scripts/deployment/backup_db.sh
 scripts/diagnostics/check_issues.py
 scripts/diagnostics/check_trials.py
 scripts/diagnostics/fast_etl.py
 scripts/diagnostics/rewrite_pipeline.py
-scripts/migrate_db_to_azure.sh
+scripts/deployment/migrate_db_to_azure.sh
 ```
 
 The `old_scripts/` entries are archived historical fetch/merge implementations. The diagnostics and shell entries are manual/deployment utilities; they remain in place until their operational owners and rollback procedures are separately verified.
@@ -211,9 +211,9 @@ The `old_scripts/` entries are archived historical fetch/merge implementations. 
 | Publisher/path | Host | Output target | Status |
 | --- | --- | --- | --- |
 | `.github/workflows/daily_pipeline.yml` | GitHub-hosted runner | Pipeline `site_data/` to frontend `public/data/` | AUTHORITATIVE HOSTED DAILY PUBLISHER |
-| `scripts/run_cron_local.sh` | Local Mac | Pipeline `site_data/` to sibling frontend `public/data/` | ACTIVE LOCAL ALTERNATE; do not overlap |
-| `scripts/run_cron.sh` | Legacy VM candidate | VM checkout `site_data/` to frontend checkout | LEGACY CANDIDATE; verify scheduler before use/retirement |
-| `scripts/admin_dashboard.py` | Docker/systemd VM service | Manual legacy prediction path; API/admin operations | ACTIVE ADMIN ENTRYPOINT |
+| `scripts/deployment/run_cron_local.sh` | Local Mac | Pipeline `site_data/` to sibling frontend `public/data/` | ACTIVE LOCAL ALTERNATE; do not overlap |
+| `scripts/deployment/run_cron.sh` | Legacy VM candidate | VM checkout `site_data/` to frontend checkout | LEGACY CANDIDATE; verify scheduler before use/retirement |
+| `scripts/deployment/admin_dashboard.py` | Docker/systemd VM service | Manual legacy prediction path; API/admin operations | ACTIVE ADMIN ENTRYPOINT |
 
 The cleanup does not disable any publisher. Before changing scheduler state, record the host, scheduler definition, lock path, log path, last run, and replacement owner.
 
@@ -226,8 +226,8 @@ These files are covered by the categories above but are listed explicitly so the
 | `api/__init__.py`, `scripts/__init__.py`, `src/__init__.py` | PACKAGE MARKERS; required for imports/package behavior |
 | `src/evaluation.py` | ACTIVE SUPPORT LIBRARY for evaluation scripts |
 | `tests/test_repository_contract.py` | MAINTAINED STATIC REGRESSION GUARDS for repository and publication contracts |
-| `scripts/auto_collect.py` | MANUAL/LEGACY scheduler wrapper; current verification ensures it does not duplicate the collector |
-| `scripts/cleanup_prediction_log.py` | MANUAL DATA MAINTENANCE utility |
+| `scripts/deployment/auto_collect.py` | MANUAL/LEGACY scheduler wrapper; current verification ensures it does not duplicate the collector |
+| `scripts/operations/cleanup_prediction_log.py` | MANUAL DATA MAINTENANCE utility |
 | `scripts/diagnostics/check_db.py`, `check_issues.py`, `check_trials.py`, `fast_etl.py`, `rewrite_pipeline.py` | MANUAL/HISTORICAL diagnostics moved from repository root |
 | `old_scripts/fetch_nasa_power.py`, `fetch_open_meteo_aod.py`, `fetch_openmeteo_all.py`, `fetch_openmeteo_gb.py`, `merge_openmeteo_all.py`, `merge_openmeteo_gb.py` | ARCHIVED historical fetch/merge implementations; do not use for daily production |
 | `scratch/check_live_db.py`, `scratch/test_onnx_nan.py` | LOCAL EXPERIMENTS; not production or maintained pytest tests |

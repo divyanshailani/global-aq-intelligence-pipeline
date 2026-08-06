@@ -82,7 +82,7 @@ jobs:
           set -Eeuo pipefail
           mkdir -p logs
           timeout --signal=TERM --kill-after=60s 90m \
-            python -u scripts/run_daily_collector.py --backfill-only
+            python -u scripts/pipeline/run_daily_collector.py --backfill-only
 
       - name: Save resumable backfill checkpoint
         if: ${{ always() }}

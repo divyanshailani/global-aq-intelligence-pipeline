@@ -9,10 +9,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_daily_entrypoints_exist_and_are_documented():
     entrypoints = [
-        "scripts/run_daily_collector.py",
-        "scripts/run_daily_etl.py",
-        "scripts/predict_v12_onnx.py",
-        "scripts/validate_predictions.py",
+        "scripts/pipeline/run_daily_collector.py",
+        "scripts/pipeline/run_daily_etl.py",
+        "scripts/pipeline/predict_v12_onnx.py",
+        "scripts/pipeline/validate_predictions.py",
     ]
     inventory = (ROOT / "SCRIPT_INVENTORY.md").read_text()
     for relative in entrypoints:
@@ -38,9 +38,9 @@ def test_scheduler_ownership_is_explicit():
     inventory = (ROOT / "SCRIPT_INVENTORY.md").read_text()
     for path in (
         ".github/workflows/daily_pipeline.yml",
-        "scripts/run_cron_local.sh",
-        "scripts/run_cron.sh",
-        "scripts/admin_dashboard.py",
+        "scripts/deployment/run_cron_local.sh",
+        "scripts/deployment/run_cron.sh",
+        "scripts/deployment/admin_dashboard.py",
     ):
         assert path in project_map or path in inventory, path
     assert "No scheduler is disabled" in project_map
