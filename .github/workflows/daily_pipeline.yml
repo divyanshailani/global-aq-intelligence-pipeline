@@ -76,9 +76,11 @@ jobs:
           PY
 
       - name: Incremental collection
+        timeout-minutes: 22
         run: |
           set -Eeuo pipefail
           echo 'Starting incremental collection'
+          echo '[COLLECT] hard budget: 20m; bounded HTTP request timeouts enabled'
           # Keep the whole public-path collection step within one hard budget.
           # Completed API chunks are checkpointed; the next scheduled run resumes
           # them. Retrying the entire collector here can consume 5 x 20 minutes

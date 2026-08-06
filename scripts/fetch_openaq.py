@@ -46,6 +46,8 @@ COUNTRIES = {
 DATE_FROM = "2021-01-01"
 CHECKPOINT_DIR = os.path.join(os.path.dirname(__file__), ".checkpoints")
 CONCURRENCY = 5  # Low concurrency for Azure VM to protect memory
+# Bound archive sockets so a stalled request becomes a fallback miss.
+HTTP_TIMEOUT = aiohttp.ClientTimeout(total=35, connect=10, sock_connect=10, sock_read=25)
 
 def get_db_connection():
     return psycopg2.connect(**DB_CONFIG)
@@ -242,7 +244,7 @@ def run_fetch(country_code, days=None, date_from=None, date_to=None, resume=Fals
         ssl_context = ssl.create_default_context(cafile=certifi.where())
         connector = aiohttp.TCPConnector(limit=CONCURRENCY, ssl=ssl_context)
         
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with aiohttp.ClientSession(connector=connector, timeout=HTTP_TIMEOUT) as session:
             for idx, station in enumerate(stations_to_process):
                 if idx % 10 == 0:
                     print(f"  [{completed+1} / {len(stations)}] Fetching station {station['openaq_id']}...")

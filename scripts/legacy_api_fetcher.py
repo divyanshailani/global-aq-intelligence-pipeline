@@ -44,6 +44,8 @@ API_BASE = "https://api.openaq.org/v3"
 DATE_FROM = "2021-01-01"
 RATE_LIMIT_SLEEP = 0.25
 CHECKPOINT_DIR = os.path.join(os.path.dirname(__file__), ".checkpoints")
+# Bound API sockets so a stalled request cannot consume the whole job budget.
+HTTP_TIMEOUT = aiohttp.ClientTimeout(total=45, connect=10, sock_connect=10, sock_read=30)
 
 import sys as _sys, os as _os
 _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), ".."))
@@ -498,7 +500,7 @@ def run_fetch(country_code, days=None, date_from=None, date_to=None, resume=Fals
         # SSL Context for macOS certifi issue
         ssl_context = ssl.create_default_context(cafile=certifi.where())
         connector = aiohttp.TCPConnector(limit=10, ssl=ssl_context)
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with aiohttp.ClientSession(connector=connector, timeout=HTTP_TIMEOUT) as session:
             for i in range(0, len(stations_to_process), chunk_size):
                 chunk = stations_to_process[i:i + chunk_size]
                 
