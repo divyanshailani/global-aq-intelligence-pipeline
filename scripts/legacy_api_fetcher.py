@@ -124,11 +124,15 @@ def fetch_country_stations(country_code):
     country_info = COUNTRIES[country_code]
     stations = []
     page = 1
+    cooldown_waits = 0
 
     while True:
         key = km.get_key()
         if not key:
-            print("  All keys in cooldown, waiting 10s...")
+            cooldown_waits += 1
+            if cooldown_waits >= 6:
+                raise RuntimeError("all OpenAQ API keys remained in cooldown for 60 seconds")
+            print(f"  All keys in cooldown, waiting 10s ({cooldown_waits}/6)...")
             time.sleep(10)
             continue
             
@@ -141,7 +145,10 @@ def fetch_country_stations(country_code):
                 "limit": 1000,
                 "page": page,
             },
+            timeout=(10, 30),
         )
+
+        cooldown_waits = 0
 
         if r.status_code == 429:
             km.report_429(key)
@@ -317,7 +324,7 @@ async def fetch_sensor_measurements_async(session, sensor_id, date_from, date_to
             break  # failed after 5 retries
             
         if data is None:
-            break
+            raise RuntimeError(f"measurement request failed after 5 attempts: sensor={sensor_id} page={page}")
                 
         results = data.get("results", [])
         if not results:
