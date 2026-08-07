@@ -366,3 +366,11 @@ Wait for more holdout data to accumulate organically, or manually backfill addit
 The 2×2 forecast grids reveal that long-horizon US models (h=14, h=30) suffer from a mean reversion trap. During true actual PM2.5 spikes of ~60 µg/m³, the XGBoost models hedge conservatively toward ~12 µg/m³. This is a fundamental mathematical property of MAE-optimized decision trees predicting the conditional mean, which naturally collapses tail events.
 **Resolution:** 
 This is identified as the next major ML architecture frontier. Proposed solutions include Quantile Regression (predicting the 90th percentile instead of the mean) or Two-Tier Regime-Switching (training separate models for clean vs. spike regimes).
+## 2026-08-07 — CI inference failure root cause and fix
+
+- Run `31182973974` completed collection and ETL, then failed at ONNX inference with `ModuleNotFoundError: No module named 'src'`.
+- The inference script was adding `<repo>/scripts` to `sys.path` instead of the repository root and was resolving models/output under `<repo>/scripts/models` and `<repo>/scripts/site_data`.
+- The 16 ONNX files are tracked in Git under `models/v12/<country>/horizon_<n>/model.onnx`; Actions gets them from `actions/checkout@v4`, not from a backend.
+- The workflow receives PostgreSQL connection values from GitHub Actions repository secrets and connects directly to Azure PostgreSQL. A local read-only probe connected successfully, but broad `min/count` scans are expensive and should not be used as health checks.
+- Fix committed as `07c89af`: resolve `PROJECT_ROOT` from `Path(__file__).resolve().parents[2]`, use it for imports/models/site_data, and assert all 16 models exist before inference.
+- Local verification: 27 tests passed; all 16 ONNX sessions loaded successfully.
