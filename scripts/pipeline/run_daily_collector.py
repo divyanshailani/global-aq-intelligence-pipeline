@@ -135,7 +135,7 @@ def run_incremental(countries, days=7):
             # rows without raising. Treat that as a miss and fall back to the
             # live v3 API, which does carry the recent days.
             if s3_rows == 0:
-                if fetch_days <= 2:
+                if fetch_days <= 4:
                     print(f"  {cc} S3 returned 0 new rows because database is already current (gap={fetch_days}d).")
                     results[cc] = {"status": "success", "rows": 0, "source": "S3_UP_TO_DATE"}
                     continue
