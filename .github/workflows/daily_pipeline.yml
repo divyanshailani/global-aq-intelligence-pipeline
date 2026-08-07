@@ -103,9 +103,10 @@ jobs:
           echo 'Incremental collection completed successfully'
 
       - name: ETL (retry transient database failures)
-        # Weather enrichment can fan out into slow upstream calls; enforce a
-        # whole-step ceiling so retries cannot consume the remaining job time.
-        timeout-minutes: 3
+        # Phase 1 bulk-loads and inserts ~1.8M rows over the remote database
+        # connection; the prior 3-minute ceiling killed the insert mid-flight.
+        # Phase 3 remains independently capped at 3 minutes in the ETL script.
+        timeout-minutes: 15
         run: |
           set -Eeuo pipefail
           succeeded=0
