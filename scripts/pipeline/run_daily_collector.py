@@ -129,8 +129,11 @@ def run_incremental(countries, days=7):
 
             if s3_rows > 0:
                 results[cc] = {"status": "success", "rows": s3_rows, "source": "S3"}
+            elif fetch_days <= 3:
+                print(f"  {cc} S3 returned 0 new rows because database is already current (gap={fetch_days}d).")
+                results[cc] = {"status": "success", "rows": 0, "source": "S3_UP_TO_DATE"}
             else:
-                print(f"  {cc} S3 returned 0 new rows (archive lag or DB up-to-date). Trying live API fallback...")
+                print(f"  {cc} S3 returned 0 rows (archive lag). Trying live API fallback...")
                 raise RuntimeError("S3 returned 0 rows")
 
         except Exception as e:
