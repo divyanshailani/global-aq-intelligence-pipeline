@@ -85,14 +85,15 @@ from src.config import DB_CONFIG
 import psycopg2
 
 def get_gap_days(cc):
-    """Query the DB for the most recent data point for this country to calculate exact days to fetch."""
+    """Query the DB for the most recent raw measurement for this country to calculate exact days to fetch."""
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT MAX(date) 
-                FROM daily_features
-                WHERE country_code = %s
+                SELECT MAX(r.datetime_utc) 
+                FROM raw_measurements r
+                JOIN stations s ON r.station_id = s.id
+                WHERE s.country_code = %s
             """, (cc,))
             row = cur.fetchone()
         conn.close()
@@ -105,10 +106,6 @@ def get_gap_days(cc):
                 last_dt = last_dt.date()
 
             gap = (datetime.utcnow().date() - last_dt).days
-            # Cap the window. The live-API fallback re-fetches every day in the
-            # window across every station, so a long gap (e.g. after an outage)
-            # makes one nightly run take hours. Catching up 7 days per night is
-            # plenty — consecutive runs converge — and keeps runtime bounded.
             return max(1, min(gap + 1, MAX_INCREMENTAL_DAYS))
     except Exception as e:
         print(f"  Warning: could not compute gap for {cc} ({e}), defaulting to 7")
