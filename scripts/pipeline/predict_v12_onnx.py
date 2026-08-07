@@ -19,7 +19,17 @@ import onnxruntime as ort
 import psycopg2
 
 import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from pathlib import Path
+
+# This file lives at <repo>/scripts/pipeline/.  Resolve the repository root
+# explicitly instead of relying on the runner's current working directory.
+# GitHub Actions invokes this script from the repository root, but the old
+# two-level dirname resolved to <repo>/scripts, so `from src...` failed before
+# any database access or model loading occurred.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from src.config import DB_CONFIG
 
 # V12 Constants
@@ -107,7 +117,11 @@ def get_latest_station_features(df, country):
     return df_c
 
 def run_inference():
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    # Resolve paths from the repository root, not from <repo>/scripts.
+    # This script is <repo>/scripts/pipeline/predict_v12_onnx.py; using one
+    # parent here silently looked for models under scripts/models and wrote
+    # outputs under scripts/site_data, while the workflow publishes root/site_data.
+    base_dir = str(PROJECT_ROOT)
     model_dir = os.path.join(base_dir, 'models', 'v12')
     output_dir = os.path.join(base_dir, 'site_data')
     

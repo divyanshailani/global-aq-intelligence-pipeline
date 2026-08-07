@@ -125,8 +125,10 @@ jobs:
           [[ "$succeeded" -eq 1 ]] || { echo 'ERROR: ETL failed after 3 attempts'; exit 1; }
 
       - name: Run V12 ONNX inference
+        timeout-minutes: 10
         run: |
           set -Eeuo pipefail
+          test "$(find models/v12 -type f -name 'model.onnx' | wc -l)" -eq 16
           python -u scripts/pipeline/predict_v12_onnx.py
 
       - name: Validate predictions
