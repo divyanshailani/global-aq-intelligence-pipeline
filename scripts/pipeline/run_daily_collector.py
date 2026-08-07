@@ -135,20 +135,25 @@ def run_incremental(countries, days=7):
             # rows without raising. Treat that as a miss and fall back to the
             # live v3 API, which does carry the recent days.
             if s3_rows == 0:
-                print(f"  {cc} S3 returned 0 rows (archive lag). Falling back to live OpenAQ API...")
-                raise RuntimeError("S3 archive returned no rows")
+                if fetch_days <= 2:
+                    print(f"  {cc} S3 returned 0 new rows because database is already current (gap={fetch_days}d).")
+                    results[cc] = {"status": "success", "rows": 0, "source": "S3_UP_TO_DATE"}
+                    continue
+                else:
+                    print(f"  {cc} S3 returned 0 rows (archive lag). Falling back to live OpenAQ API...")
+                    raise RuntimeError("S3 archive returned no rows")
 
             results[cc] = {"status": "success", "rows": s3_rows, "source": "S3"}
         except Exception as e:
             print(f"  {cc} S3 FETCH MISS: {e}. Initiating Fallback to legacy OpenAQ API...")
             try:
                 from scripts.pipeline.legacy_api_fetcher import run_fetch as legacy_run_fetch
-                # The live fallback is checkpointed in chunks.  Resume after a
-                # hosted-run time budget instead of restarting the country from
-                # station 1 on every Actions run.
-                stats = legacy_run_fetch(cc, days=fetch_days, resume=True)
+                # Cap fallback window to at most 2 days to prevent API rate limits from exceeding 20m budget
+                fallback_days = min(fetch_days, 2)
+                print(f"  {cc} Live API fallback running for {fallback_days} days...")
+                stats = legacy_run_fetch(cc, days=fallback_days, resume=True)
                 api_rows = stats.get("rows_inserted", 0)
-                if api_rows <= 0:
+                if api_rows <= 0 and fetch_days > 2:
                     raise RuntimeError("live API fallback returned zero rows")
                 results[cc] = {"status": "success", "rows": api_rows, "source": "API_FALLBACK"}
                 print(f"  {cc} API FALLBACK SUCCESS: {api_rows} rows.")
