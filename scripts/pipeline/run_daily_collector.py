@@ -129,21 +129,42 @@ def run_incremental(countries, days=7):
 
             if s3_rows > 0:
                 results[cc] = {"status": "success", "rows": s3_rows, "source": "S3"}
-            else:
-                print(f"  {cc} S3 returned 0 new rows (DB is up-to-date with S3 archive, gap={fetch_days}d).")
+            elif fetch_days <= 3:
+                print(f"  {cc} S3 returned 0 new rows; database is current within {fetch_days} days.")
                 results[cc] = {"status": "success", "rows": 0, "source": "S3_UP_TO_DATE"}
+            else:
+                print(f"  {cc} S3 returned 0 rows; archive is lagging. REST fallback is disabled.")
+                results[cc] = {
+                    "status": "success",
+                    "rows": 0,
+                    "source": "S3_ARCHIVE_LAG",
+                    "error": "OpenAQ S3 archive has not published the requested dates",
+                }
 
         except Exception as e:
+            allow_api_fallback = os.environ.get("ALLOW_OPENAQ_API_FALLBACK", "0").lower() in {
+                "1", "true", "yes"
+            }
+            if not allow_api_fallback:
+                print(f"  ⚠️ {cc} S3 failed ({e}); REST fallback disabled. Keeping existing DB data.")
+                results[cc] = {
+                    "status": "success",
+                    "rows": 0,
+                    "source": "S3_ERROR",
+                    "error": str(e),
+                }
+                continue
+
             try:
                 from scripts.pipeline.legacy_api_fetcher import run_fetch as legacy_run_fetch
                 fallback_days = min(fetch_days, 2)
-                print(f"  {cc} Live API fallback running for {fallback_days} days...")
+                print(f"  {cc} Explicit REST fallback enabled; fetching {fallback_days} days...")
                 stats = legacy_run_fetch(cc, days=fallback_days, resume=True)
                 api_rows = stats.get("rows_inserted", 0)
                 results[cc] = {"status": "success", "rows": api_rows, "source": "API_FALLBACK"}
                 print(f"  {cc} API FALLBACK SUCCESS: {api_rows} rows.")
             except Exception as e2:
-                print(f"  ⚠️ {cc} Collection fallback warning: {e2}. Proceeding with existing DB measurements.")
+                print(f"  ⚠️ {cc} Explicit REST fallback failed: {e2}. Keeping existing DB data.")
                 results[cc] = {"status": "success", "rows": 0, "source": "EXISTING_DB"}
 
     return results

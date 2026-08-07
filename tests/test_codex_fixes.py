@@ -16,6 +16,7 @@ import sys
 import json
 import re
 import glob
+from unittest.mock import patch
 
 import pandas as pd
 import numpy as np
@@ -24,6 +25,29 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 PROJECT_ROOT = os.path.join(os.path.dirname(__file__), "..")
+
+
+class TestIncrementalArchiveFallback:
+    """S3 archive lag must not consume OpenAQ REST API keys by default."""
+
+    def test_archive_lag_does_not_use_rest_fallback(self):
+        from scripts.pipeline import run_daily_collector as collector
+
+        with patch.object(collector, "get_gap_days", return_value=7), \
+                patch.object(collector, "run_fetch", return_value={"rows_inserted": 0}):
+            result = collector.run_incremental(["US"])
+
+        assert result["US"]["source"] == "S3_ARCHIVE_LAG"
+
+    def test_s3_error_does_not_use_rest_fallback(self):
+        from scripts.pipeline import run_daily_collector as collector
+
+        with patch.dict(os.environ, {"ALLOW_OPENAQ_API_FALLBACK": "0"}), \
+                patch.object(collector, "get_gap_days", return_value=7), \
+                patch.object(collector, "run_fetch", side_effect=RuntimeError("S3 unavailable")):
+            result = collector.run_incremental(["US"])
+
+        assert result["US"]["source"] == "S3_ERROR"
 
 
 # ─── Test 1: Rolling Feature Leakage Prevention ──────────────
