@@ -108,7 +108,7 @@ jobs:
           succeeded=0
           for attempt in 1 2 3; do
             echo "ETL attempt $attempt/3"
-            if python -u scripts/pipeline/run_daily_etl.py --recent-days 5 --max-enrich 300; then
+            if python -u scripts/pipeline/run_daily_etl.py --recent-days 5 --max-enrich 50; then
               echo "ETL succeeded on attempt $attempt"
               succeeded=1
               break

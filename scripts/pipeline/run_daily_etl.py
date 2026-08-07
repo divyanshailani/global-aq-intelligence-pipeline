@@ -188,8 +188,15 @@ def main():
             # ── Sequential API fetching (Open-Meteo free tier rate-limits concurrent) ──
             successful_updates = []
             failed_count = 0
+            phase3_start = time.time()
+            phase3_budget = 180  # 3 minutes hard budget cap for weather enrichment
 
             for i, (sid, dt, lat, lon) in enumerate(missing_rows):
+                if time.time() - phase3_start > phase3_budget:
+                    print(f"\n  ⏰ Phase 3 time budget (3m) reached. Processed {i}/{len(missing_rows)} rows. "
+                          f"Remaining rows stay NULL for next run.")
+                    break
+
                 target_date_str = dt.strftime("%Y-%m-%d")
                 try:
                     w_data = fetch_weather_for_date(fallback_manager, lat, lon, target_date_str)
