@@ -45,7 +45,7 @@ COUNTRIES = {
 # Config
 DATE_FROM = "2021-01-01"
 CHECKPOINT_DIR = os.path.join(os.path.dirname(__file__), ".checkpoints")
-CONCURRENCY = 5  # Low concurrency for Azure VM to protect memory
+CONCURRENCY = 25  # Parallel HTTP requests to public S3 bucket
 # Bound archive sockets so a stalled request becomes a fallback miss.
 HTTP_TIMEOUT = aiohttp.ClientTimeout(total=35, connect=10, sock_connect=10, sock_read=25)
 
@@ -140,26 +140,13 @@ async def fetch_day_for_station(session, station, date_obj, semaphore):
             continue
     return []
 
-async def process_station_async(session, station, date_list, semaphore, conn):
-    tasks = []
-    for d in date_list:
-        tasks.append(fetch_day_for_station(session, station, d, semaphore))
-    
-    chunk_size = 30
-    total_inserted = 0
-    for i in range(0, len(tasks), chunk_size):
-        chunk_tasks = tasks[i:i+chunk_size]
-        results = await asyncio.gather(*chunk_tasks)
-        
-        flat_rows = []
-        for r in results:
-            flat_rows.extend(r)
-            
-        if flat_rows:
-            inserted = insert_measurements(conn, flat_rows)
-            total_inserted += inserted
-            
-    return total_inserted
+async def process_station_async(session, station, date_list, semaphore):
+    tasks = [fetch_day_for_station(session, station, d, semaphore) for d in date_list]
+    results = await asyncio.gather(*tasks)
+    flat_rows = []
+    for r in results:
+        flat_rows.extend(r)
+    return flat_rows
 
 def insert_measurements(conn, rows):
     if not rows:
@@ -170,13 +157,6 @@ def insert_measurements(conn, rows):
         VALUES %s
         ON CONFLICT (station_id, parameter, datetime_utc) DO NOTHING
     """
-    # Count ACTUAL inserts, not rows attempted. ON CONFLICT DO NOTHING silently
-    # drops duplicates, so returning len(rows) made re-fetching already-stored
-    # days report huge fake counts (e.g. "829,121 rows inserted" while the DB
-    # gained nothing) — which hid the fact that S3 had no new data at all.
-    #
-    # execute_values() sets cur.rowcount from only the LAST page it sends, so
-    # we page manually and accumulate to stay correct for batches > page_size.
     page_size = 5000
     inserted = 0
     with conn.cursor() as cur:
@@ -244,18 +224,27 @@ def run_fetch(country_code, days=None, date_from=None, date_to=None, resume=Fals
         ssl_context = ssl.create_default_context(cafile=certifi.where())
         connector = aiohttp.TCPConnector(limit=CONCURRENCY, ssl=ssl_context)
         
+        STATION_BATCH_SIZE = 20
         async with aiohttp.ClientSession(connector=connector, timeout=HTTP_TIMEOUT) as session:
-            for idx, station in enumerate(stations_to_process):
-                if idx % 10 == 0:
-                    print(f"  [{completed+1} / {len(stations)}] Fetching station {station['openaq_id']}...")
+            for i in range(0, len(stations_to_process), STATION_BATCH_SIZE):
+                batch = stations_to_process[i:i + STATION_BATCH_SIZE]
+                if i % 100 == 0 or i == 0:
+                    print(f"  [{completed+1} / {len(stations)}] Processing station batch ({len(batch)} stations)...")
                 
-                inserted = await process_station_async(session, station, date_list, semaphore, conn)
-                total_rows += inserted
-                completed += 1
+                batch_tasks = [process_station_async(session, st, date_list, semaphore) for st in batch]
+                batch_results = await asyncio.gather(*batch_tasks)
                 
-                if idx % 50 == 0:
-                    save_checkpoint(country_code, station["openaq_id"], completed)
-                    
+                batch_rows = []
+                for station_rows in batch_results:
+                    batch_rows.extend(station_rows)
+                
+                if batch_rows:
+                    inserted = insert_measurements(conn, batch_rows)
+                    total_rows += inserted
+                
+                completed += len(batch)
+                save_checkpoint(country_code, batch[-1]["openaq_id"], completed)
+                
     asyncio.run(run_chunked_processing())
 
     stats = {

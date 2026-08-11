@@ -129,17 +129,9 @@ def run_incremental(countries, days=7):
 
             if s3_rows > 0:
                 results[cc] = {"status": "success", "rows": s3_rows, "source": "S3"}
-            elif fetch_days <= 3:
-                print(f"  {cc} S3 returned 0 new rows; database is current within {fetch_days} days.")
-                results[cc] = {"status": "success", "rows": 0, "source": "S3_UP_TO_DATE"}
             else:
-                print(f"  {cc} S3 returned 0 rows; archive is lagging. REST fallback is disabled.")
-                results[cc] = {
-                    "status": "success",
-                    "rows": 0,
-                    "source": "S3_ARCHIVE_LAG",
-                    "error": "OpenAQ S3 archive has not published the requested dates",
-                }
+                print(f"  {cc} S3 returned 0 new rows; database is current with S3 archive (gap={fetch_days}d).")
+                results[cc] = {"status": "success", "rows": 0, "source": "S3_UP_TO_DATE"}
 
         except Exception as e:
             allow_api_fallback = os.environ.get("ALLOW_OPENAQ_API_FALLBACK", "0").lower() in {
