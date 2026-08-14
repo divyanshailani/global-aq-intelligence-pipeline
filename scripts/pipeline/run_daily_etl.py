@@ -262,19 +262,22 @@ def main():
     print(f"✅ ETL Pipeline Complete! ({minutes}m {seconds}s)")
     print("=" * 50)
 
-    # Show database status
+    # Show a low-cost database status snapshot. Exact COUNT(*) scans are
+    # expensive on the production tables and can consume the ETL timeout after
+    # the actual transformation work has already completed. PostgreSQL's
+    # planner estimates are sufficient for this human-readable diagnostic.
     with conn.cursor() as cur:
-        cur.execute("SELECT COUNT(*) FROM raw_measurements")
-        raw_count = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM clean_measurements")
-        clean_count = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM daily_features")
-        feature_count = cur.fetchone()[0]
+        cur.execute("""
+            SELECT relname, GREATEST(reltuples, 0)::bigint
+            FROM pg_class
+            WHERE relname IN ('raw_measurements', 'clean_measurements', 'daily_features')
+        """)
+        estimated_counts = dict(cur.fetchall())
 
-    print(f"\n📊 Database Status:")
-    print(f"   raw_measurements:    {raw_count:,}")
-    print(f"   clean_measurements:  {clean_count:,}")
-    print(f"   daily_features:      {feature_count:,}")
+    print("\n📊 Database Status (estimated):")
+    print(f"   raw_measurements:    {estimated_counts.get('raw_measurements', 0):,}")
+    print(f"   clean_measurements:  {estimated_counts.get('clean_measurements', 0):,}")
+    print(f"   daily_features:      {estimated_counts.get('daily_features', 0):,}")
 
     conn.close()
 
