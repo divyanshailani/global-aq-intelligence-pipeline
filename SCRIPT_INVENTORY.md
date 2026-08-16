@@ -169,7 +169,7 @@ The active tree contains only maintained production and verification modules. Hi
 ## 7. Legacy End-to-End Path
 
 ```text
-scripts/deployment/predict_pipeline.py
+scripts/archive/legacy/predict_pipeline.py
 scripts/models/retrain_pipeline.py
 scripts/deployment/admin_dashboard.py -> predict_pipeline.py (manual admin action)
 ```

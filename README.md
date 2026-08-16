@@ -142,7 +142,7 @@ We migrated to the V12 Challenger Pure Engine, marking the first honestly-evalua
 │   ├── run_daily_etl.py           # Production: cleaning, features, weather/AOD
 │   ├── predict_v12_onnx.py        # Production: 16 ONNX models, 4 countries × 4 horizons
 │   ├── validate_predictions.py    # Production: output contract checks
-│   ├── predict_pipeline.py        # Legacy/manual end-to-end runner
+│   ├── archive/legacy/predict_pipeline.py  # Legacy/manual end-to-end runner
 │   ├── train_v5.py                # Legacy chained GBR (baseline)
 │   ├── train_v6.py                # Direct multi-horizon (no future weather)
 │   ├── fetch_openaq.py            # Live sensor data
@@ -218,7 +218,7 @@ python3 scripts/pipeline/predict_v12_onnx.py
 python3 scripts/pipeline/validate_predictions.py
 ```
 
-Output JSONs are written to the pipeline root `site_data/`. GitHub Actions copies those files to the separate frontend repository at `global-aq-intelligence/public/data/` and commits them during the publish stage. `data/site_data/` contains older tracked output and is not the current source of truth. The local `scripts/deployment/predict_pipeline.py` runner is retained for manual/legacy workflows and is not the scheduled production entrypoint.
+Output JSONs are written to the pipeline root `site_data/`. GitHub Actions copies those files to the separate frontend repository at `global-aq-intelligence/public/data/` and commits them during the publish stage. `data/site_data/` contains older tracked output and is not the current source of truth. The local `scripts/archive/legacy/predict_pipeline.py` runner is retained for manual/legacy workflows and is not the scheduled production entrypoint.
 
 Weather and AOD enrichment is required by the V12 model. Do not remove or skip these features: `om_temperature`, `om_wind_speed`, `om_precipitation`, `om_aerosol_optical_depth`, `rolling_3day_precip`, and `aod_volatility_index` are part of the inference input contract.
 

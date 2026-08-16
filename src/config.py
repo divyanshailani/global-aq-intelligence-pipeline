@@ -45,6 +45,9 @@ if "azure" in db_host or "postgres.database.azure.com" in db_host:
 # ─── Paths ────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")
+V12_MODEL_DIR = os.path.join(BASE_DIR, "models", "v12")
+# Legacy V5 default retained for archived/manual tools that still read V5
+# artifacts; production V12 stages resolve models/v12 via V12_MODEL_DIR.
 MODEL_DIR = os.path.join(BASE_DIR, "models", "v5")
 # Root site_data/ is the authoritative staging directory for the V12
 # publisher and is copied to the separate frontend repository.
