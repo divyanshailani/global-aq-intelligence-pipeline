@@ -88,6 +88,20 @@ We migrated to the V12 Challenger Pure Engine, marking the first honestly-evalua
 - **IN Resilience**: Despite a massive 63.5% AOD null rate (monsoon blinding), India achieved MASE 0.5185 at h=30.
 - **Error Decay Reality**: The error decay chart shows GB stable at ~1 µg/m³ MAE across all horizons, AU stable around ~4, US monotonically increasing from 6.1 to 9.6, and IN decreasing from 34.6 to 27.1 due to the monsoon transition easing volatility.
 
+### Live Validation Metrics (updated daily)
+
+The pipeline validates predictions against actual PM2.5 readings and publishes live metrics to `accuracy.json`. Drift detection flags any country where live MAE exceeds 1.5× the test MAE baseline.
+
+| Country | Test MAE | Live MAE | Live Acc | Samples | Drift |
+|---------|----------|----------|----------|---------|-------|
+| GB | 1.5 | 2.46 | 56.1% | 44 | ⚠️ 1.64× (station mix shift) |
+| US | 2.5 | 2.02 | 81.9% | 54 | ✅ |
+| IN | 27.1 | 15.17 | 40.6% | 54 | ✅ (0.56× baseline) |
+| AU | 3.0 | 2.11 | 61.7% | 55 | ✅ |
+| **Overall** | — | **5.57** | **54.5%** | **207** | — |
+
+> **Note:** GB drift is caused by a station count explosion (6 → 335 since training). The model generalizes well but the test baseline needs updating. The pipeline auto-opens a GitHub issue when drift is detected.
+
 ### Forecast Visualizations
 
 <details>
@@ -138,36 +152,29 @@ We migrated to the V12 Challenger Pure Engine, marking the first honestly-evalua
 ```
 .
 ├── scripts/
-│   ├── run_daily_collector.py     # Production: bounded incremental collection
-│   ├── run_daily_etl.py           # Production: cleaning, features, weather/AOD
-│   ├── predict_v12_onnx.py        # Production: 16 ONNX models, 4 countries × 4 horizons
-│   ├── validate_predictions.py    # Production: output contract checks
-│   ├── archive/legacy/predict_pipeline.py  # Legacy/manual end-to-end runner
-│   ├── train_v5.py                # Legacy chained GBR (baseline)
-│   ├── train_v6.py                # Direct multi-horizon (no future weather)
-│   ├── fetch_openaq.py            # Live sensor data
-│   ├── fetch_nasa_power.py        # Historical satellite weather
-│   ├── fetch_firms_fire.py        # NASA FIRMS fire count data
-│   ├── cleanup_prediction_log.py  # Archive impossible past-date rows
-│   ├── build_global_features.py  # Bulk feature backfill
-│   └── backfill_aod_partitioned.py # Multi-VM parallel AOD backfill
+│   ├── pipeline/                   # Production pipeline scripts
+│   │   ├── run_daily_collector.py  # Bounded incremental collection
+│   │   ├── run_daily_etl.py        # Cleaning, features, weather/AOD
+│   │   ├── predict_v12_onnx.py     # 16 ONNX models, 4 countries × 4 horizons
+│   │   └── validate_predictions.py # Country-level validation + drift detection → accuracy.json
+│   ├── deployment/admin_dashboard.py # Local admin UI (FastAPI, hmac auth)
+│   └── archive/                    # Legacy/research scripts
 ├── src/
-│   ├── config.py                  # DB config + paths
-│   ├── features.py                # Feature engineering (lag/rolling/delta)
-│   ├── cleaning.py                # Outlier removal + null handling
+│   ├── config.py                   # DB config + paths (V12_MODEL_DIR, MODEL_DIR legacy V5)
+│   ├── features.py                 # Feature engineering (lag/rolling/delta)
+│   ├── cleaning.py                 # Outlier removal + null handling
 │   └── aggregations.py            # Station-level daily aggregation
 ├── models/
-│   ├── v12/                       # Production — Parquet Modal Grid (Challenger Engine)
-│   └── v5_to_v11/                 # Deprecated legacy models
+│   ├── v12/                        # Production — 16 ONNX models (4 countries × 4 horizons)
+│   └── v5_to_v11/                  # Deprecated legacy models
+├── site_data/                      # Generated JSON → published to frontend public/data/
 ├── sql/
-│   └── schema.sql                 # Schema + v6 migration (ADD COLUMN IF NOT EXISTS)
-├── data/
-│   └── site_data/                 # Exported JSONs (auto-synced to frontend)
+│   └── schema.sql                  # Schema + v6 migration (ADD COLUMN IF NOT EXISTS)
 ├── tests/
 │   ├── test_codex_fixes.py
 │   └── test_processing.py
-├── pytest.ini                     # Restricts discovery to tests/
-├── ISSUES.md                      # Engineering log — 8 problems and how they were solved
+├── pytest.ini                       # Restricts discovery to tests/
+├── ISSUES.md                       # Engineering log — 8 problems and how they were solved
 ├── requirements.txt
 └── .env.example
 ```
