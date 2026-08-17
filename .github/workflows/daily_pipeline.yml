@@ -250,7 +250,13 @@ jobs:
 
       - name: Notify on failure
         if: ${{ failure() }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           echo "::error::Global AQI Daily Pipeline failed (run $GITHUB_RUN_ID)"
-          # Could add Slack/webhook here
+          if [[ -n "${SLACK_WEBHOOK_URL:-}" ]]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"🚨 Global AQI Daily Pipeline failed\\nRun: $GITHUB_RUN_ID\\nRepo: $GITHUB_REPOSITORY\\nBranch: $GITHUB_REF_NAME\\nTime: $(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" \
+              "$SLACK_WEBHOOK_URL" || true
+          fi
           exit 1
