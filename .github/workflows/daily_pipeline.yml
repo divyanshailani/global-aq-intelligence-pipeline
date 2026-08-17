@@ -237,4 +237,20 @@ jobs:
             echo "- Runner: $RUNNER_OS"
             echo '- Public path: collection → ETL (3 retries) → inference → validation → frontend publish'
             echo '- Historical backfill: intentionally separate; daily runner never blocks public data'
+            # Include drift warnings from accuracy.json if available
+            if [[ -f site_data/accuracy.json ]]; then
+              drift=$(jq -r '.drift_warnings // [] | join("\\n")' site_data/accuracy.json 2>/dev/null)
+              if [[ -n "$drift" ]]; then
+                echo
+                echo '### ⚠️ Model Drift Warnings'
+                echo "$drift"
+              fi
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify on failure
+        if: ${{ failure() }}
+        run: |
+          echo "::error::Global AQI Daily Pipeline failed (run $GITHUB_RUN_ID)"
+          # Could add Slack/webhook here
+          exit 1
