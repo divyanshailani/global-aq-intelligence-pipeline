@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  issues: write
 
 env:
   POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
@@ -260,3 +261,38 @@ jobs:
               "$SLACK_WEBHOOK_URL" || true
           fi
           exit 1
+
+      - name: Check persistent drift and open issue
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          if [[ ! -f site_data/accuracy.json ]]; then
+            echo "No accuracy.json — skipping drift check"
+            exit 0
+          fi
+
+          drift=$(jq -r '.drift_warnings // [] | length' site_data/accuracy.json)
+          if [[ "$drift" -eq 0 ]]; then
+            echo "No drift warnings today"
+            exit 0
+          fi
+
+          warnings=$(jq -r '.drift_warnings | join("\n")' site_data/accuracy.json)
+          echo "Drift warnings detected:"
+          echo "$warnings"
+
+          # Check if there's an open drift issue already
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "model-drift" --state open --json number,title --jq 'length')
+          if [[ "$existing" -gt 0 ]]; then
+            echo "Open drift issue already exists — commenting with today's status"
+            issue_num=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "model-drift" --state open --json number --jq '.[0].number')
+            gh issue comment "$issue_num" --repo "$GITHUB_REPOSITORY" --body "$(printf '**Drift still active** — %s\n\n```\n%s\n```\n\n[Run %s](%s)' "$(date -u +%Y-%m-%d)" "$warnings" "$GITHUB_RUN_ID" "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")"
+          else
+            echo "No open drift issue — creating one"
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "⚠️ Model Drift Detected — retraining may be needed" \
+              --label "model-drift" \
+              --body "$(printf '## Model Drift Warnings\n\n```\n%s\n```\n\nDetected on %s via [run %s](https://github.com/%s/actions/runs/%s).\n\n## Action Required\n\n- [ ] Investigate root cause (feature shift, station mix change, seasonal bias)\n- [ ] Check if drift persists for 7+ consecutive days\n- [ ] If persistent, retrain V12 models with recent data\n- [ ] Export new ONNX models and deploy to `models/v12/`\n\n## Drift Detection Criteria\n\nDrift is flagged when live MAE > 1.5× test MAE baseline for any country.' "$warnings" "$(date -u +%Y-%m-%d)" "$GITHUB_RUN_ID" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+          fi
