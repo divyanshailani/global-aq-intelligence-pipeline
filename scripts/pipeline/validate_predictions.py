@@ -31,6 +31,15 @@ from src.config import DB_CONFIG, COUNTRIES  # noqa: E402
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SITE_DATA_DIR = os.path.join(PROJECT_ROOT, "site_data")
 
+# Test MAE baselines from V12 training (COUNTRY_META in predict_v12_onnx.py)
+TEST_MAE_BASELINES = {
+    "IN": 27.1,
+    "US": 2.5,
+    "GB": 1.5,
+    "AU": 3.0,
+}
+DRIFT_THRESHOLD = 1.5  # alert if live MAE > 1.5x test MAE
+
 # Don't publish a live number off a handful of samples.
 MIN_LIVE_VALIDATIONS = 30
 
@@ -127,6 +136,7 @@ def summarize(rows):
     acc = max(0.0, (1.0 - (mae / mean_y)) * 100.0) if mean_y > 0 else 0.0
 
     per_country = {}
+    drift_warnings = []
     for cc in COUNTRIES:
         sub = [(a, p) for c, a, p in rows if c and c.strip() == cc]
         if not sub:
@@ -135,15 +145,26 @@ def summarize(rows):
         p = np.array([s[1] for s in sub], dtype=float)
         c_mae = float(np.mean(np.abs(a - p)))
         c_mean = float(np.mean(a))
+        
+        # Drift detection: live MAE > 1.5x test MAE baseline
+        test_mae = TEST_MAE_BASELINES.get(cc)
+        drift = None
+        if test_mae and test_mae > 0:
+            ratio = c_mae / test_mae
+            if ratio > DRIFT_THRESHOLD:
+                drift = {"ratio": round(ratio, 2), "threshold": DRIFT_THRESHOLD, "test_mae": test_mae}
+                drift_warnings.append(f"{cc}: live MAE {c_mae:.2f} > {DRIFT_THRESHOLD}x test MAE {test_mae} (ratio={ratio:.2f})")
+        
         per_country[cc] = {
             "mae": round(c_mae, 2),
             "accuracy_percentage": round(max(0.0, (1.0 - (c_mae / c_mean)) * 100.0), 2)
             if c_mean > 0
             else None,
             "sample_count": len(sub),
+            "drift": drift,
         }
 
-    return mae, acc, len(rows), per_country
+    return mae, acc, len(rows), per_country, drift_warnings
 
 
 def main():
@@ -161,7 +182,7 @@ def main():
     finally:
         conn.close()
 
-    mae, acc, n, per_country = summarize(rows)
+    mae, acc, n, per_country, drift_warnings = summarize(rows)
 
     if n >= MIN_LIVE_VALIDATIONS and mae is not None and acc is not None:
         source = "live"
@@ -171,6 +192,11 @@ def main():
         source = "insufficient_samples"
         pub_mae, pub_acc = None, None
         print(f"  Live metrics hidden until {MIN_LIVE_VALIDATIONS}+ validations (have {n})")
+
+    if drift_warnings:
+        print("  ⚠️  DRIFT DETECTED:")
+        for w in drift_warnings:
+            print(f"    {w}")
 
     if args.dry_run:
         print("  DRY RUN — accuracy.json not written.")
@@ -197,6 +223,7 @@ def main():
         "sample_count": n,
         "live_validation_count": n,
         "live_per_country": per_country,
+        "drift_warnings": drift_warnings,
     }
 
     os.makedirs(SITE_DATA_DIR, exist_ok=True)
