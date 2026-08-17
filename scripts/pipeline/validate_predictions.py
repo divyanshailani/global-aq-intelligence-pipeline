@@ -27,8 +27,9 @@ import psycopg2
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from src.config import DB_CONFIG, COUNTRIES  # noqa: E402
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SITE_DATA_DIR = os.path.join(BASE_DIR, "site_data")
+# PROJECT_ROOT = repo root (three levels up from scripts/pipeline/validate_predictions.py)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+SITE_DATA_DIR = os.path.join(PROJECT_ROOT, "site_data")
 
 # Don't publish a live number off a handful of samples.
 MIN_LIVE_VALIDATIONS = 30
