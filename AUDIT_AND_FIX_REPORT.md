@@ -121,6 +121,29 @@ Why fix 8 matters: `SLACK_WEBHOOK_URL` currently holds the literal placeholder `
 
 The invariant established here: **a red run now means the public path broke.** Everything after step 11 is advisory.
 
+### Verification
+
+`scripts/pipeline/assert_site_data_fresh.py` was unit-tested locally across four scenarios before shipping: fresh artifacts with a 4-day lag (pass), a 15-day lag (fail), yesterday's `generated_at` (fail), and a missing `model_meta.json` (fail).
+
+End-to-end: run [32348271799](https://github.com/divyanshailani/global-aq-intelligence-pipeline/actions/runs/32348271799) (`workflow_dispatch` on `6889910`, 2026-08-20T08:19Z) completed **success** with all 16 steps green. The relevant evidence from its logs:
+
+```
+Assert generated data is fresh
+  OK: predictions_AU.json generated 2026-08-20T08:37:02.667121Z
+  OK: predictions_AU.json observation lag 4d (last_data_date=2026-08-16)
+  OK: predictions_US.json observation lag 3d (last_data_date=2026-08-17)
+  All 5 artifacts are fresh (lag budget 10d).
+
+Publish generated site data
+  Frontend published and verified at ae1af652795f7bc124bf67c89bf5880103d9fa4f
+
+Check persistent drift and open issue
+  Drift warnings detected: GB: live MAE 2.75 > 1.5x test MAE 1.5 (ratio=1.83)
+  No open drift issue — creating one
+```
+
+The drift path now works as intended: issue [#13](https://github.com/divyanshailani/global-aq-intelligence-pipeline/issues/13) was created instead of failing the run. That issue is the GB false positive described in P1 — it is the first thing to resolve, because a permanently-open drift issue is the same signal-quality failure as the one this commit fixed.
+
 ---
 
 ## 4. Remaining work, in priority order
@@ -169,7 +192,8 @@ For the pipeline to run unattended, each of these must hold. Current status mark
 - [x] Failures open a GitHub issue (no external setup required)
 - [x] Advisory steps cannot fail the run
 - [x] Drift detection self-heals its own label
-- [ ] Drift channel free of known false positives — **blocked on P1 (GB baseline)**
+- [x] Verified green end-to-end on run 32348271799
+- [ ] Drift channel free of known false positives — **blocked on P1 (GB baseline); issue #13 is open right now for this reason**
 - [ ] Validation backlog bounded — **blocked on P2**
 - [ ] Third-party weather API off the critical path — **blocked on P3**
 
