@@ -43,6 +43,7 @@ ENV/
 Thumbs.db
 Icon?
 scripts/.checkpoints/
+scripts/pipeline/.checkpoints/
 logs/
 site_data/
 scratch/
@@ -74,3 +75,9 @@ data/weather_openmeteo_*.csv
 
 # AI Agent memory
 .agents/
+.hermes/
+
+# Local security-tool state. git_secrets_scan.log holds raw git-history excerpts
+# produced while scanning for leaked credentials and must never be committed.
+.mimosa/
+git_secrets_scan.log

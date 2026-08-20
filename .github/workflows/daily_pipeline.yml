@@ -26,7 +26,9 @@ env:
 jobs:
   run-daily-pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Worst case under the current budgets: 32m collection + 20m ETL + 10m
+    # inference + validation/publish. Steady state is ~23m.
+    timeout-minutes: 70
 
     steps:
       - name: Checkout pipeline
@@ -77,23 +79,37 @@ jobs:
           PY
 
       - name: Incremental collection
-        timeout-minutes: 22
+        timeout-minutes: 32
         run: |
           set -Eeuo pipefail
           echo 'Starting incremental collection'
-          echo '[COLLECT] hard budget: 20m; bounded HTTP request timeouts enabled'
-          # Keep the whole public-path collection step within one hard budget.
-          # Completed API chunks are checkpointed; the next scheduled run resumes
-          # them. Retrying the entire collector here can consume 5 x 20 minutes
-          # and repeatedly re-run slow S3 scans before ETL is reached.
-          set +e
-          timeout --signal=TERM --kill-after=60s 20m \
-            python -u scripts/pipeline/run_daily_collector.py --incremental-only
-          rc=$?
-          set -e
+          echo '[COLLECT] budget: 20m primary + 8m resume; bounded HTTP request timeouts enabled'
+          # Completed API chunks are checkpointed, so a budget overrun is resumable
+          # rather than restartable. Retrying the whole collector burns 20 minutes
+          # per attempt re-running slow S3 scans; instead the primary pass gets 20
+          # minutes and a single resume pass gets 8 more, which is enough to finish
+          # the tail on a slow OpenAQ day without blocking the public path.
+          run_pass() {
+            local budget="$1"
+            set +e
+            timeout --signal=TERM --kill-after=60s "$budget" \
+              python -u scripts/pipeline/run_daily_collector.py --incremental-only
+            local rc=$?
+            set -e
+            return "$rc"
+          }
+
+          rc=0
+          run_pass 20m || rc=$?
 
           if [[ "$rc" -eq 124 ]]; then
-            echo 'ERROR: incremental collection hit the 20-minute budget'
+            echo 'WARNING: primary collection pass hit its 20-minute budget; resuming from checkpoint'
+            rc=0
+            run_pass 8m || rc=$?
+          fi
+
+          if [[ "$rc" -eq 124 ]]; then
+            echo 'ERROR: incremental collection still incomplete after the resume pass'
             echo 'Checkpointed progress will be resumed by the next scheduled run.'
             echo 'ETL/inference/publish are intentionally blocked because public-path freshness is incomplete.'
             exit 124
@@ -107,7 +123,10 @@ jobs:
         # Phase 1 bulk-loads and inserts ~1.8M rows over the remote database
         # connection; the prior 3-minute ceiling killed the insert mid-flight.
         # Phase 3 remains independently capped at 3 minutes in the ETL script.
-        timeout-minutes: 15
+        # Steady-state ETL takes 11-12 minutes, so a 15-minute ceiling left no
+        # headroom for Open-Meteo retry storms; 20 minutes keeps one retry
+        # attempt survivable inside the 45-minute job budget.
+        timeout-minutes: 20
         run: |
           set -Eeuo pipefail
           succeeded=0
@@ -136,6 +155,16 @@ jobs:
         run: |
           set -Eeuo pipefail
           python -u scripts/pipeline/validate_predictions.py
+
+      - name: Assert generated data is fresh
+        # The site displays generated_at, which is always "now" — it says nothing
+        # about whether the underlying observations advanced. Both are checked
+        # here so the frontend can never advertise freshness it does not have.
+        env:
+          MAX_OBSERVATION_LAG_DAYS: '10'
+        run: |
+          set -Eeuo pipefail
+          python -u scripts/pipeline/assert_site_data_fresh.py
 
       - name: Prepare frontend repository
         env:
@@ -205,7 +234,10 @@ jobs:
           echo "Frontend published and verified at $remote_sha"
 
       - name: Final database health check
+        # Advisory. Runs after the frontend is published, so a transient
+        # connection blip here must not repaint a successful publish as a failure.
         if: ${{ success() }}
+        continue-on-error: true
         run: |
           set -Eeuo pipefail
           python - <<'PY'
@@ -253,21 +285,60 @@ jobs:
         if: ${{ failure() }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -Euo pipefail
           echo "::error::Global AQI Daily Pipeline failed (run $GITHUB_RUN_ID)"
-          if [[ -n "${SLACK_WEBHOOK_URL:-}" ]]; then
-            curl -X POST -H 'Content-type: application/json' \
-              --data "{\"text\":\"🚨 Global AQI Daily Pipeline failed\\nRun: $GITHUB_RUN_ID\\nRepo: $GITHUB_REPOSITORY\\nBranch: $GITHUB_REF_NAME\\nTime: $(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" \
-              "$SLACK_WEBHOOK_URL" || true
+
+          # A GitHub issue is the primary channel because it needs no external
+          # setup. Slack is best-effort: the secret currently holds a placeholder,
+          # so a non-empty value is not proof of a working webhook.
+          case "${SLACK_WEBHOOK_URL:-}" in
+            https://hooks.slack.com/*)
+              curl -sS -m 20 -X POST -H 'Content-type: application/json' \
+                --data "{\"text\":\"🚨 Global AQI Daily Pipeline failed\\nRun: $GITHUB_RUN_ID\\nRepo: $GITHUB_REPOSITORY\\nBranch: $GITHUB_REF_NAME\\nTime: $(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" \
+                "$SLACK_WEBHOOK_URL" || echo 'Slack notification failed (non-fatal)'
+              ;;
+            '')
+              echo 'SLACK_WEBHOOK_URL unset — skipping Slack notification'
+              ;;
+            *)
+              echo 'SLACK_WEBHOOK_URL is not a Slack webhook URL — skipping Slack notification'
+              ;;
+          esac
+
+          if ! gh label list --repo "$GITHUB_REPOSITORY" --search pipeline-failure --json name --jq '.[].name' | grep -qx 'pipeline-failure'; then
+            gh label create pipeline-failure --repo "$GITHUB_REPOSITORY" \
+              --color b60205 \
+              --description 'Autonomous daily pipeline failed and needs human attention' || true
           fi
+
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --label pipeline-failure --state open --json number --jq 'length' || echo 0)
+          if [[ "$existing" -gt 0 ]]; then
+            issue_num=$(gh issue list --repo "$GITHUB_REPOSITORY" --label pipeline-failure --state open --json number --jq '.[0].number')
+            gh issue comment "$issue_num" --repo "$GITHUB_REPOSITORY" \
+              --body "Failed again on $(date -u +%Y-%m-%d) — [run $GITHUB_RUN_ID]($run_url)" || true
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "🚨 Daily pipeline failed — $(date -u +%Y-%m-%d)" \
+              --label pipeline-failure \
+              --body "$(printf 'The scheduled daily pipeline failed.\n\n- Run: [%s](%s)\n- Branch: %s\n- Time: %s\n\nCheck which step failed. Post-publish steps are advisory (`continue-on-error`), so a red run here means the public path itself broke: collection budget, ETL, inference, the freshness assertion, or the frontend push.\n\nClose this issue once the next run is green.' "$GITHUB_RUN_ID" "$run_url" "$GITHUB_REF_NAME" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")" || true
+          fi
+
           exit 1
 
       - name: Check persistent drift and open issue
+        # Advisory only. This runs after the frontend is already published, so a
+        # failure here previously marked the whole run red while the public site
+        # was correctly updated (2026-08-19 and 2026-08-20: the `model-drift`
+        # label did not exist, so `gh issue create --label` exited 1).
         if: ${{ success() }}
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -Eeuo pipefail
+          set -Euo pipefail
           if [[ ! -f site_data/accuracy.json ]]; then
             echo "No accuracy.json — skipping drift check"
             exit 0
@@ -283,8 +354,15 @@ jobs:
           echo "Drift warnings detected:"
           echo "$warnings"
 
-          # Check if there's an open drift issue already
-          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "model-drift" --state open --json number,title --jq 'length')
+          # Self-heal the label so a fresh clone of this repo does not fail here.
+          if ! gh label list --repo "$GITHUB_REPOSITORY" --search model-drift --json name --jq '.[].name' | grep -qx 'model-drift'; then
+            echo "Creating missing 'model-drift' label"
+            gh label create model-drift --repo "$GITHUB_REPOSITORY" \
+              --color d93f0b \
+              --description 'Live MAE exceeded test MAE baseline; retraining may be needed' || true
+          fi
+
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "model-drift" --state open --json number --jq 'length' || echo 0)
           if [[ "$existing" -gt 0 ]]; then
             echo "Open drift issue already exists — commenting with today's status"
             issue_num=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "model-drift" --state open --json number --jq '.[0].number')
