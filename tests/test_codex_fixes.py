@@ -189,11 +189,11 @@ class TestConfig:
     def test_no_hardcoded_creds_in_scripts(self):
         """Tracked code/docs should not carry hardcoded DB passwords or infra IDs."""
         roots = ["scripts", "src", ".github"]
+        # acc1 (globalaqiserver) was retired 2026-08-20; do not hardcode its old
+        # password fragment here — that would keep a retired secret in the public
+        # repo. Guard the live production host instead (a hostname is not secret).
         forbidden = [
-            r"8765@@@",
-            r"password=['\"]8765['\"]",
-            r"POSTGRES_PASSWORD.*8765",
-            r"globalaqiserver\.postgres\.database\.azure\.com",
+            r"globalaqi-archive\.postgres\.database\.azure\.com",
             r"4\.213\.226\.19",
         ]
         violations = []
