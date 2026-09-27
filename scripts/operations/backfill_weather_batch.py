@@ -173,6 +173,8 @@ def main():
     updates = []
     failed_chunks = 0
     written = 0
+    db_reconnects = 0
+    wall_dates = 0
     t0 = time.time()
 
     for i, dt in enumerate(sorted(by_date), 1):
@@ -184,6 +186,7 @@ def main():
 
         date_updates = []
         consecutive_failures = 0
+        date_failures = 0
 
         for c in range(0, len(coords), CHUNK):
             chunk = coords[c:c + CHUNK]
@@ -193,49 +196,88 @@ def main():
                 w_list = fetch_with_retry(
                     fetch_weather_batch_for_date, fallback, lats_str, lons_str, target,
                     label=f"{target} weather chunk {c // CHUNK + 1}")
-                aod_list = fetch_with_retry(
-                    fetch_aod_batch_for_date, fallback, lats_str, lons_str, target,
-                    label=f"{target} AOD chunk {c // CHUNK + 1}")
-                for (lat, lon), w, a in zip(chunk, w_list, aod_list):
-                    for sid in coord_to_sids[(lat, lon)]:
-                        date_updates.append((
-                            float(w["om_temperature"]),
-                            float(w["om_wind_speed"]),
-                            float(w["om_precipitation"]),
-                            float(a["om_aerosol_optical_depth"]),
-                            int(sid),
-                            dt,
-                        ))
-                consecutive_failures = 0
             except Exception as e:
                 failed_chunks += 1
+                date_failures += 1
                 consecutive_failures += 1
-                print(f"  ⚠️ {target} chunk {c // CHUNK + 1} "
+                print(f"  ⚠️ {target} weather chunk {c // CHUNK + 1} "
                       f"({len(chunk)} locations) failed: {e}")
                 if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
                     print(f"  ⛔ {target}: {consecutive_failures} consecutive "
                           f"failed chunks — cooling down 120s (free tier saturated)")
                     time.sleep(120)
                     consecutive_failures = 0
+                time.sleep(SLEEP + random.uniform(0, 1.0))
+                continue
+            try:
+                aod_list = fetch_with_retry(
+                    fetch_aod_batch_for_date, fallback, lats_str, lons_str, target,
+                    tries=2, label=f"{target} AOD chunk {c // CHUNK + 1}")
+            except Exception as e:
+                failed_chunks += 1
+                print(f"  ⚠️ {target} AOD chunk {c // CHUNK + 1} "
+                      f"({len(chunk)} locations) failed, AOD left NULL: {str(e)[:90]}")
+                aod_list = [None] * len(chunk)
+            consecutive_failures = 0
+            for (lat, lon), w, a in zip(chunk, w_list, aod_list):
+                for sid in coord_to_sids[(lat, lon)]:
+                    date_updates.append((
+                        float(w["om_temperature"]),
+                        float(w["om_wind_speed"]),
+                        float(w["om_precipitation"]),
+                        float(a["om_aerosol_optical_depth"]) if a else None,
+                        int(sid),
+                        dt,
+                    ))
 
             time.sleep(SLEEP + random.uniform(0, 1.0))
 
         updates.extend(date_updates)
 
         if not args.dry_run and date_updates:
-            with conn.cursor() as cur:
-                execute_batch(cur, UPDATE_SQL, date_updates, page_size=1000)
-            conn.commit()
-            written += len(date_updates)
-            print(f"  [{i}/{n_dates}] {target}: {len(coords)} coords, "
-                  f"{len(date_updates):,} rows written this date, "
-                  f"{written:,} cumulative ({time.time() - t0:.0f}s elapsed)")
+            write_ok = False
+            for attempt in (1, 2):
+                try:
+                    with conn.cursor() as cur:
+                        execute_batch(cur, UPDATE_SQL, date_updates, page_size=1000)
+                    conn.commit()
+                    write_ok = True
+                    break
+                except psycopg2.OperationalError as e:
+                    print(f"  ⚠️ {target} DB write failed (attempt {attempt}/2): {e}")
+                    time.sleep(5)
+                    try:
+                        conn.rollback()
+                    except psycopg2.Error:
+                        pass
+                    conn = psycopg2.connect(**DB_CONFIG)
+                    db_reconnects += 1
+                    print("  DB reconnected.")
+            if write_ok:
+                written += len(date_updates)
+                print(f"  [{i}/{n_dates}] {target}: {len(coords)} coords, "
+                      f"{len(date_updates):,} rows written this date, "
+                      f"{written:,} cumulative ({time.time() - t0:.0f}s elapsed)")
+            else:
+                print(f"  ⚠️ {target}: {len(date_updates):,} rows fetched but NOT "
+                      f"written (DB write failed twice)")
         else:
             print(f"  [{i}/{n_dates}] {target}: {len(coords)} coords, "
                   f"{len(date_updates):,} fetched ({time.time() - t0:.0f}s elapsed)")
 
+        if (not args.dry_run and not date_updates and date_failures >= 2):
+            wall_dates += 1
+            if wall_dates >= 3:
+                print(f"\n⛔ QUOTA WALL at {target}: 3 consecutive dates "
+                      f"fully failed — free tier exhausted for now. Stopping "
+                      f"early; re-run the same command later to resume "
+                      f"(everything written so far is committed).")
+                break
+        else:
+            wall_dates = 0
+
     print(f"\nFetched {len(updates):,} station-day weather rows, "
-          f"{failed_chunks} failed chunks.")
+          f"{failed_chunks} failed chunks, {db_reconnects} DB reconnects.")
 
     if args.dry_run:
         # Spot-check a few fetched values
