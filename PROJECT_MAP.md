@@ -11,7 +11,7 @@ OpenAQ / fallback APIs
 scripts/pipeline/run_daily_collector.py --incremental-only
         |
         v
-scripts/pipeline/run_daily_etl.py --recent-days 5 --max-enrich 300
+scripts/pipeline/run_daily_etl.py --recent-days 5 --max-enrich 5000
         |  cleaning, features, weather and AOD enrichment
         v
 scripts/pipeline/predict_v12_onnx.py

@@ -6,7 +6,7 @@ Orchestrates: raw_measurements → cleaning → clean_measurements → features 
 V2 (2026-06-28): All phases use batch operations.
     - Phase 1 (Cleaning): ONE bulk load → vectorized clean → ONE bulk insert
     - Phase 2 (Features): ONE bulk load → in-memory groupby → ONE bulk upsert
-    - Phase 3 (Weather):  Concurrent API fetching → batch DB update
+    - Phase 3 (Weather):  Multi-location batch API calls → batch DB update
     - Phase 4 (Advanced):  Single SQL window function (unchanged, already efficient)
 
 Usage:
@@ -68,10 +68,12 @@ def main():
                         help="Only run cleaning (skip features)")
     parser.add_argument("--features-only", action="store_true",
                         help="Only run features (skip cleaning)")
-    parser.add_argument("--max-enrich", type=int, default=600,
-                        help="Max rows to weather/AOD-enrich per run "
-                             "(0 = unlimited). Bounds Phase 3 runtime; "
-                             "skipped rows stay NULL and retry next run.")
+    parser.add_argument("--max-enrich", type=int, default=5000,
+                        help="Max station-days to weather/AOD-enrich per run "
+                             "(0 = unlimited). Safety valve for pathological "
+                             "windows; steady state is ~1-2K station-days, "
+                             "served by a few dozen batched Open-Meteo calls. "
+                             "Skipped rows stay NULL and retry next run.")
     args = parser.parse_args()
 
     conn = psycopg2.connect(**DB_CONFIG)
@@ -117,15 +119,15 @@ def main():
         )
         print()
 
-    # ── Step 3: Sequential Weather & AOD Enrichment (Batch DB Updates) ──
+    # ── Step 3: Batch Weather & AOD Enrichment ──
     if not args.clean_only:
         print("=" * 50)
-        print("🌍 Phase 3: Weather & AOD Enrichment (Batch Updates)")
+        print("🌍 Phase 3: Weather & AOD Enrichment (Multi-Location Batch)")
         print("=" * 50)
 
         from src.api_fallback_manager import ApiFallbackManager
-        from scripts.pipeline.fetch_daily_weather import fetch_weather_for_date
-        from scripts.pipeline.fetch_daily_aod import fetch_aod_for_date
+        from scripts.pipeline.fetch_daily_weather import fetch_weather_batch_for_date
+        from scripts.pipeline.fetch_daily_aod import fetch_aod_batch_for_date
 
         import re
         raw_keys = os.getenv("OPENAQ_KEYS", "")
@@ -138,9 +140,11 @@ def main():
             base_backoff=2.0
         )
 
-        # Only fetch weather for RECENT missing rows (last N days).
-        # Older NULL-weather rows stay NULL — XGBoost hist handles NaN natively.
-        weather_lookback = args.recent_days + 1  # +1 buffer for timezone edge
+        # Only fetch weather for RECENT missing rows. The lookback is decoupled
+        # from recent_days (which drives Phases 1-2) so the last week's gaps
+        # self-heal even when only recent raw data was ingested. Older NULLs
+        # stay NULL — XGBoost hist handles NaN natively.
+        weather_lookback = args.recent_days + 4
 
         with conn.cursor() as cur:
             if station_ids is None:
@@ -150,6 +154,8 @@ def main():
                     JOIN stations s ON df.station_id = s.id
                     WHERE (df.om_temperature IS NULL
                        OR df.om_precipitation IS NULL)
+                      AND s.latitude IS NOT NULL
+                      AND s.longitude IS NOT NULL
                       AND df.date >= NOW() - INTERVAL '%s days'
                     ORDER BY df.date DESC, df.station_id
                 """, (weather_lookback,))
@@ -162,20 +168,19 @@ def main():
                     WHERE df.station_id IN ({format_strings})
                       AND (df.om_temperature IS NULL
                            OR df.om_precipitation IS NULL)
+                      AND s.latitude IS NOT NULL
+                      AND s.longitude IS NOT NULL
                       AND df.date >= NOW() - INTERVAL '%s days'
                     ORDER BY df.date DESC, df.station_id
                 """, tuple(station_ids) + (weather_lookback,))
 
             missing_rows = cur.fetchall()
 
-        # Bound Phase 3: each row costs 2 sequential Open-Meteo calls (weather
-        # + AOD) and the free tier rate-limits hard, measured at ~10 rows/min.
-        # Unbounded this stage runs 4+ hours and delays inference/publish.
-        # Weather is OPTIONAL — XGBoost hist handles NaN natively — so rows we
-        # skip today simply stay NULL and get picked up on a later run (the
-        # query always re-selects rows where om_* IS NULL).
+        # Safety valve: each batch call serves ~250 coordinates in 2 API calls
+        # (weather + AOD), so steady state (~1-2K station-days) is a few dozen
+        # calls under a minute. The cap only bounds pathological windows.
         if args.max_enrich and len(missing_rows) > args.max_enrich:
-            print(f"  Capping enrichment: {len(missing_rows)} rows missing, "
+            print(f"  Capping enrichment: {len(missing_rows)} station-days missing, "
                   f"processing newest {args.max_enrich} this run "
                   f"(rest stay NULL and retry next run).")
             missing_rows = missing_rows[:args.max_enrich]
@@ -183,44 +188,67 @@ def main():
         if not missing_rows:
             print("  ✓ All daily_features have complete weather & AOD context.")
         else:
-            print(f"  Fetching Weather & AOD for {len(missing_rows)} rows...")
+            print(f"  Fetching Weather & AOD for {len(missing_rows)} station-days...")
 
-            # ── Sequential API fetching (Open-Meteo free tier rate-limits concurrent) ──
+            # ── Multi-location batch fetching ──
+            # One Open-Meteo call serves up to ~250 coordinates (URL length
+            # limit ~300), so ~250 station-days cost 2 calls instead of 500.
+            from collections import defaultdict
+            by_date = defaultdict(list)
+            for sid, dt, lat, lon in missing_rows:
+                by_date[dt].append((sid, lat, lon))
+
             successful_updates = []
             failed_count = 0
             phase3_start = time.time()
-            phase3_budget = 180  # 3 minutes hard budget cap for weather enrichment
+            phase3_budget = 180  # 3-minute hard budget cap for weather enrichment
+            budget_hit = False
 
-            for i, (sid, dt, lat, lon) in enumerate(missing_rows):
-                if time.time() - phase3_start > phase3_budget:
-                    print(f"\n  ⏰ Phase 3 time budget (3m) reached. Processed {i}/{len(missing_rows)} rows. "
-                          f"Remaining rows stay NULL for next run.")
-                    break
-
+            for dt in sorted(by_date, reverse=True):
                 target_date_str = dt.strftime("%Y-%m-%d")
-                try:
-                    w_data = fetch_weather_for_date(fallback_manager, lat, lon, target_date_str)
-                    aod_data = fetch_aod_for_date(fallback_manager, lat, lon, target_date_str)
-                    successful_updates.append((
-                        w_data["om_temperature"],
-                        w_data["om_wind_speed"],
-                        w_data["om_precipitation"],
-                        aod_data["om_aerosol_optical_depth"],
-                        sid,
-                        dt
-                    ))
-                except Exception as e:
-                    # DON'T delete the row — XGBoost hist handles NaN natively.
-                    # Missing weather just stays NULL, model still predicts.
-                    failed_count += 1
-                    if failed_count <= 5:  # Only print first 5 errors
-                        print(f"  ⚠️ Skipped: Station {sid} on {target_date_str}: {e}")
+                rows = by_date[dt]
 
-                # Progress every 50 rows
-                if (i + 1) % 50 == 0:
-                    print(f"    [{i+1}/{len(missing_rows)}] fetched...")
+                coords = sorted({(lat, lon) for _, lat, lon in rows})
+                coord_to_sids = defaultdict(list)
+                for sid, lat, lon in rows:
+                    coord_to_sids[(lat, lon)].append(sid)
 
-                time.sleep(0.15)  # Gentle on Open-Meteo free tier
+                for c in range(0, len(coords), 250):
+                    if time.time() - phase3_start > phase3_budget:
+                        if not budget_hit:
+                            print(f"\n  ⏰ Phase 3 time budget (3m) reached. Processed "
+                                  f"{len(successful_updates)}/{len(missing_rows)} station-days. "
+                                  f"Remaining rows stay NULL for next run.")
+                        budget_hit = True
+                        break
+
+                    chunk = coords[c:c + 250]
+                    lats_str = ",".join(str(lat) for lat, _ in chunk)
+                    lons_str = ",".join(str(lon) for _, lon in chunk)
+                    try:
+                        w_list = fetch_weather_batch_for_date(fallback_manager, lats_str, lons_str, target_date_str)
+                        aod_list = fetch_aod_batch_for_date(fallback_manager, lats_str, lons_str, target_date_str)
+                        for (lat, lon), w, a in zip(chunk, w_list, aod_list):
+                            for sid in coord_to_sids[(lat, lon)]:
+                                successful_updates.append((
+                                    w["om_temperature"],
+                                    w["om_wind_speed"],
+                                    w["om_precipitation"],
+                                    a["om_aerosol_optical_depth"],
+                                    sid,
+                                    dt
+                                ))
+                    except Exception as e:
+                        # DON'T delete the row — XGBoost hist handles NaN natively.
+                        # A failed chunk just stays NULL and retries next run.
+                        failed_count += len(chunk)
+                        print(f"  ⚠️ Skipped chunk of {len(chunk)} locations on {target_date_str}: {e}")
+
+                    time.sleep(0.5)  # Gentle on Open-Meteo free tier
+
+                print(f"    [{len(successful_updates)}/{len(missing_rows)}] fetched through {target_date_str}...")
+                if budget_hit:
+                    break
 
             # ── ONE Batch UPDATE for all successful results ──
             if successful_updates:
@@ -239,7 +267,7 @@ def main():
                 print(f"  ✅ Updated {len(successful_updates)} rows.")
 
             if failed_count > 0:
-                print(f"  ⚠️ {failed_count} rows left with NULL weather (XGBoost handles NaN natively).")
+                print(f"  ⚠️ {failed_count} station-days left with NULL weather (XGBoost handles NaN natively).")
 
         print()
 

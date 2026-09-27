@@ -23,7 +23,7 @@ The scheduled production pipeline is deliberately split into bounded stages:
 
 ```bash
 python3 scripts/pipeline/run_daily_collector.py --incremental-only
-python3 scripts/pipeline/run_daily_etl.py --recent-days 5 --max-enrich 300
+python3 scripts/pipeline/run_daily_etl.py --recent-days 5 --max-enrich 5000
 python3 scripts/pipeline/predict_v12_onnx.py
 python3 scripts/pipeline/validate_predictions.py
 ```

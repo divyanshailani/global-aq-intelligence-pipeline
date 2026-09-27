@@ -44,9 +44,10 @@ country+date instead.
 
 - OpenAQ's S3 archive lags real time ~3-4 days and 404s per-station silently.
   Recent days must come from the live v3 API.
-- Weather/AOD enrichment costs 2 sequential Open-Meteo calls per row and the
-  free tier throttles hard: ~10 rows/min. Bounded by `--max-enrich` (default
-  300). Skipped rows stay NULL and retry — XGBoost handles NaN natively.
+- Weather/AOD enrichment uses multi-location batch Open-Meteo calls (~250
+  coordinates per call), so steady state (~1-2K station-days) costs a few
+  dozen calls and under a minute. Bounded by `--max-enrich` (default 5000).
+  Skipped rows stay NULL and retry — XGBoost handles NaN natively.
 - The live-API fallback re-fetches every day in the window across every
   station, so `get_gap_days()` is clamped to `MAX_INCREMENTAL_DAYS` (7).
   Without the clamp, a 6-day gap meant ~1h of work for IN's 748 stations.

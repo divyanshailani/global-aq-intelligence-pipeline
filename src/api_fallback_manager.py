@@ -19,7 +19,7 @@ class ApiFallbackManager:
                 current_headers['X-API-Key'] = current_key
 
             try:
-                resp = requests.get(url, params=params, headers=current_headers, timeout=15)
+                resp = requests.get(url, params=params, headers=current_headers, timeout=60)
                 
                 if resp.status_code == 200:
                     return resp.json()

@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [12.2.0] - Batch Open-Meteo Enrichment & Drift Backfill (2026-09-28)
+
+### ⚙️ Phase 3 Weather/AOD: Per-Row → Multi-Location Batch Calls
+- **Why**: Since 2026-07-25 the daily ETL's Open-Meteo enrichment silently starved — one weather call + one AOD call per row (×2) against the free tier's 10,000 calls/day IP cap. Steady state alone (~2,300 station-days/day) burns 4,600+ calls; backfill days (5,000+ rows) blow past it. Result: `om_*` NULLs on every country, and `rolling_3day_precip` / `aod_volatility_index` frozen at stale values.
+- **What**: `fetch_daily_weather.py` + `fetch_daily_aod.py` now issue multi-location batch calls (~250 coordinates per call, URL-length bounded) and write one `execute_batch` UPDATE per date. Steady-state ETL enrichment drops from ~4,600 calls to a few dozen and runs in under a minute.
+- **CI bump**: `daily_pipeline.yml` ETL step now passes `--max-enrich 5000` (was 50); `run_daily_etl.py` default raised 50 → 5000. `tests/README.md`, `README.md`, `PROJECT_MAP.md` updated to batch semantics.
+
+### 🐛 One-off Backfill: `scripts/operations/backfill_weather_batch.py`
+- Fills `om_*` NULLs for the 2026-07-25 → 2026-09-24 gap (archive + forecast APIs, 7-day boundary handled per-date) and recomputes `rolling_3day_precip` / `aod_volatility_index` for all rows whose 3-row window overlaps the NULL era (cutoff 2026-07-18), matching Phase 4's `ROWS BETWEEN` window semantics exactly.
+- Read-only health check: `scripts/operations/check_db_health.py` (row counts, freshness, per-date NULL rates, country split, prediction log drift flags, table sizes).
+
 ## [12.1.0] - V12 Official Launch & Pipeline Refactor (2026-06-28)
 
 ### 🚀 Production V12 Launch
