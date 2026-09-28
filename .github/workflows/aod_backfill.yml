@@ -1,17 +1,24 @@
 name: Global AQI AOD Backfill
 
 # Closes AOD holes in daily_features. Aerosol optical depth comes from the
-# Open-Meteo air-quality host, which throttles the residential IP used for local
-# repairs (every attempt re-arms its per-minute limiter), while GitHub runners
-# get a clean budget — the daily pipeline's AOD calls have succeeded from here
-# for months. Weather columns are left untouched: run the script locally with
-# --skip-aod for those.
+# Open-Meteo air-quality host, whose free-tier budget is a small number of
+# REQUESTS per hour per IP (measured 2026-09-28: ~4-6, unchanged whether each
+# call covers 1 day or 14) and which does not recover within minutes - six
+# calls spaced 75s apart were all rejected.
 #
-# Run manually with the date range that needs filling (the script is
-# resumable and only fetches rows still missing AOD). The air-quality host's
-# hourly budget is small relative to a multi-week hole, so expect to dispatch
-# this more than once: each run fills what the budget allows, stops cleanly on
-# its own circuit breaker, and the next run resumes from what is still NULL.
+# Prefer the local loop for this host: GitHub runner IPs are shared and almost
+# always already exhausted (one 46-window chunk spent 24 minutes on 429s and
+# filled nothing), while a home IP answers a 200-location call in ~1.6s.
+# scripts/operations/aod_fill_loop.sh drives that loop; it fills whatever each
+# hour's budget allows and resumes automatically.
+#
+# This workflow is kept for the case where the runner's IP happens to be clean.
+# Weather columns are left untouched: run the script locally with --skip-aod.
+#
+# Run manually with the date range that needs filling (the script is resumable
+# and only fetches rows still missing AOD). A multi-week hole needs several
+# dispatches: each run fills what the budget allows, stops on its own circuit
+# breaker, and the next run resumes from what is still NULL.
 
 on:
   workflow_dispatch:
