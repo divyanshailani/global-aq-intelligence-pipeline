@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+
+## [12.2.2] - Failure Containment: Contract Gate, ETL Budget, External Watchdog (2026-09-28)
+
+### 🚨 The day two independent failure modes were found in one scan
+- The scheduled run existed, died in ETL at its exact 20m ceiling (12:16:01→12:36:14Z) while the identical step six hours earlier took 14m40s — and publish skipped silently, leaving the site fresh only because a manual run had pushed it hours before. The old flat step ceiling killed the whole 3-attempt retry loop with zero attempts used.
+- Separately: GitHub's scheduler created **no run at all** the previous day, and nothing anywhere could notice — a workflow cannot alert from a run that never started.
+
+### 🔒 Blocking data-contract gate (`scripts/pipeline/assert_data_contract.py`)
+- Runs after ETL, before inference/publish. Asserts the rows the pipeline just wrote: zero NULL `country_code` in the ETL window (the §20 bug class — inference filters on the column, so the site shows June as "today"), observation lag ≤ 6d, weather/AOD NULL budgets, prediction run ≤ 2d with 4 countries. Thresholds set from measured live baselines (obs lag 3d, temp NULL 9.9%, AOD NULL 38%), not guesses; env-tunable.
+- Wired into `daily_pipeline.yml` as a **blocking** step — unlike the advisory final health check, this one stops bad rows from reaching inference or the frontend.
+
+### ⏱️ ETL timeout budget, per attempt
+- The step ceiling (34m) now lives on **each attempt** via `timeout 15m`, so a slow pass costs one attempt, not the run; job ceiling raised 70→95m to exceed the sum of step ceilings (a job budget smaller than its steps reproduces the same bug one level up).
+
+### 🐕 External watchdog (`scripts/operations/pipeline_watchdog.py`, launchd `com.globalaqi.watchdog`)
+- Checks from **outside GitHub**: did today's run exist (missing 8h past cron → dispatch one recovery run/day; failed → report, never blind-retry), observation lag, weather-feed NULL rate, storage vs the 32 GiB cap, and the *published* site's `last_data_date` on the frontend repo.
+- Escalates with a GitHub issue, once per UTC day (state in `data/watchdog_state.json`). First live alert: issue #16. launchd over cron so sleep-coalesced ticks fire on wake; log path must live on the boot volume (launchd kills the job with EX_CONFIG on `/Volumes` stdout paths).
+- Installed via `scripts/deployment/install_watchdog.sh`; ticks at 17:30/20:30/23:30 IST (12/15/18Z).
+
+### 🧹 Honesty & inventory hygiene
+- Deleted `evaluate_v11_vs_v12.py` (archived copy). Its V11 side scored `date + h` predictions against `date`'s same-day PM2.5 while V12 used correct `target_date` remapping — every "V12 wins N/N" figure it emitted was a comparison artifact. Recovery: `git log --diff-filter=D`.
+- `SCRIPT_INVENTORY.md` audited path-by-path against disk: a third of section 6's listed paths had silently moved to `scripts/archive/`; phantom "untracked tools" removed; new watchdog registered in section 8 + scheduler matrix.
+- `RUNBOOK.md` added: 60-second health check, scheduler ownership, every failure mode with its dated incident and fix, threshold rationale, and the launchd/credentials traps.
+
 ## [12.2.1] - Measurement Retention & Storage Headroom (2026-09-28)
 
 ### 🗄️ `clean_measurements` Retention: 25.6 GB → 19 GB Database

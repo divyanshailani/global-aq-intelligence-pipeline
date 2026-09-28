@@ -87,3 +87,8 @@ data/weather_openmeteo_*.csv
 # produced while scanning for leaked credentials and must never be committed.
 .mimosa/
 git_secrets_scan.log
+
+# Watchdog dispatch/escalation bookkeeping. Machine-local: it records "this
+# box already dispatched a recovery run today", which must never be shared
+# between machines or a second host would assume the first already acted.
+data/watchdog_state.json

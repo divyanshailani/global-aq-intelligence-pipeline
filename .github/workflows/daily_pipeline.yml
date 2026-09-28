@@ -26,9 +26,12 @@ env:
 jobs:
   run-daily-pipeline:
     runs-on: ubuntu-latest
-    # Worst case under the current budgets: 32m collection + 20m ETL + 10m
-    # inference + validation/publish. Steady state is ~23m.
-    timeout-minutes: 70
+    # Worst case under the current budgets: 32m collection + 34m ETL + 10m
+    # inference + validation/publish/health. Steady state is ~23m. The job
+    # ceiling must stay above the sum of step ceilings or it reproduces the
+    # 2026-09-28 failure one level up: a slow-but-healthy pass killed by a
+    # budget that assumed an average run.
+    timeout-minutes: 95
 
     steps:
       - name: Checkout pipeline
@@ -123,16 +126,20 @@ jobs:
         # Phase 1 bulk-loads and inserts ~1.8M rows over the remote database
         # connection; the prior 3-minute ceiling killed the insert mid-flight.
         # Phase 3 remains independently capped at 3 minutes in the ETL script.
-        # Steady-state ETL takes 11-12 minutes, so a 15-minute ceiling left no
-        # headroom for Open-Meteo retry storms; 20 minutes keeps one retry
-        # attempt survivable inside the 45-minute job budget.
-        timeout-minutes: 20
+        # Steady state is 11-15 minutes. On 2026-09-28 the step's old flat
+        # 20-minute ceiling killed the run mid-pass (12:16:01->12:36:14,
+        # exactly 20m) with zero of the 3 retry attempts ever running, while
+        # the identical step six hours earlier took 14m40s. The ceiling now
+        # lives on each ATTEMPT (15m: steady state + jitter; a true hang dies
+        # there) and the step fits two attempts plus backoff.
+        timeout-minutes: 34
         run: |
           set -Eeuo pipefail
           succeeded=0
           for attempt in 1 2 3; do
             echo "ETL attempt $attempt/3"
-            if python -u scripts/pipeline/run_daily_etl.py --recent-days 5 --max-enrich 5000; then
+            if timeout --signal=TERM --kill-after=60s 15m \
+              python -u scripts/pipeline/run_daily_etl.py --recent-days 5 --max-enrich 5000; then
               echo "ETL succeeded on attempt $attempt"
               succeeded=1
               break
@@ -143,6 +150,17 @@ jobs:
             fi
           done
           [[ "$succeeded" -eq 1 ]] || { echo 'ERROR: ETL failed after 3 attempts'; exit 1; }
+
+      - name: Assert written data contract
+        # Blocking, unlike the advisory final health check: every bug class
+        # this gate covers (NULL country_code reaching the site, the ETL
+        # silently predicting a June date as "today") got a write into the DB
+        # and then every downstream step reported success. Failing HERE stops
+        # inference and publish from propagating the bad rows; the ETL wrote
+        # them, the site must not wear them.
+        run: |
+          set -Eeuo pipefail
+          python -u scripts/pipeline/assert_data_contract.py
 
       - name: Run V12 ONNX inference
         timeout-minutes: 10

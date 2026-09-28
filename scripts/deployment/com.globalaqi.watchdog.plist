@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  GlobalAQI pipeline watchdog.
+
+  Why launchd and not cron (which this repo otherwise uses for backups):
+  cron silently SKIPS a tick while the Mac sleeps; launchd's
+  StartCalendarInterval fires the job once when the machine wakes from
+  sleep, which matters because this box is a workstation, not a server.
+
+  StartCalendarInterval uses LOCAL wall time (this machine is IST+0530, no
+  DST). The three ticks are 12:00Z / 15:00Z / 18:00Z UTC:
+    17:30 IST (12:00Z) - records; inside the 8h dispatch grace window
+    20:30 IST (15:00Z) - first tick past 13:43Z, can dispatch a recovery run
+    23:30 IST (18:00Z) - last tick of the evening
+  The grace window exists because GitHub's scheduler has been observed
+  queuing this repo's cron runs until 11:59Z (6h16m delay, 2026-09-28).
+
+  RunAtLoad: a boot also runs one check, so "database unreachable" or
+  "published site stale" gets caught even on a day the ticks all slept
+  through (dedup: at most one issue per UTC day).
+
+  StandardOut/Err CANNOT live on the external /Volumes SSD: launchd then
+  kills the job with exit 78 EX_CONFIG before the program runs (bisected
+  live on 2026-09-28; WorkingDirectory on /Volumes is fine, log paths are
+  not). ~/Library/Logs is the sanctioned location.
+
+  Install:  scripts/deployment/install_watchdog.sh
+  Manual check: python3 scripts/operations/pipeline_watchdog.py --no-dispatch
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.globalaqi.watchdog</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/python3</string>
+    <string>/Volumes/ssd/projects/pow-eda-pipeline/scripts/operations/pipeline_watchdog.py</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Volumes/ssd/projects/pow-eda-pipeline</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Hour</key><integer>17</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Hour</key><integer>20</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Hour</key><integer>23</integer><key>Minute</key><integer>30</integer></dict>
+  </array>
+  <key>StandardOutPath</key>
+  <string>/Users/divyanshailani/Library/Logs/globalaqi/watchdog.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/divyanshailani/Library/Logs/globalaqi/watchdog.log</string>
+</dict>
+</plist>

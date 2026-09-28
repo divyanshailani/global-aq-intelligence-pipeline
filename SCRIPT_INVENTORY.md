@@ -24,14 +24,18 @@ These are the only Python stages called directly by `.github/workflows/daily_pip
 | `scripts/pipeline/run_daily_etl.py` | Cleaning, feature generation, weather/AOD enrichment | Called by daily workflow |
 | `scripts/pipeline/predict_v12_onnx.py` | V12 ONNX inference and site-data generation | Called by daily workflow |
 | `scripts/pipeline/validate_predictions.py` | Prediction contract and accuracy validation | Called by daily workflow |
+| `scripts/pipeline/assert_data_contract.py` | Post-ETL write contract (NULL country_code, freshness, NULL budgets) — blocks publish | Called by daily workflow (added 2026-09-28) |
+| `scripts/pipeline/assert_site_data_fresh.py` | Blocks publish when observation lag exceeds budget (generated_at is always "now") | Called by daily workflow |
 
 The production order is:
 
 ```text
 run_daily_collector.py
   -> run_daily_etl.py
+  -> assert_data_contract.py        (blocking: written rows obey contract)
   -> predict_v12_onnx.py
   -> validate_predictions.py
+  -> assert_site_data_fresh.py      (blocking: observations advanced, not just generated_at)
   -> frontend publication
 ```
 
@@ -93,8 +97,7 @@ scripts/operations/backfill_full_aod.py
 scripts/operations/backfill_full_weather.py
 scripts/operations/backfill_recent_aod.py
 scripts/operations/backfill_recent_weather.py
-scripts/backfill_om_columns.py              # untracked local tool
-scripts/operations/build_global_features.py
+scripts/operations/backfill_weather_batch.py
 scripts/operations/bulk_backfill_local.py
 scripts/operations/export_azure_to_parquet.py
 scripts/operations/fetch_defra_bulk.py
@@ -108,69 +111,48 @@ scripts/operations/fetch_visual_crossing.py
 scripts/operations/fetch_weather.py
 scripts/operations/ingest_openaq.py
 scripts/operations/ingest_openaq_data.py
-scripts/load_daily_features_to_acc2.py   # untracked local tool
-scripts/load_missing_clean_measurements.py # untracked local tool
 scripts/operations/merge_nasa_fire.py
 scripts/operations/patch_weather_batch.py
 scripts/operations/patch_weather_standalone.py
 scripts/operations/process_firms_fire.py
 scripts/operations/process_firms_global.py
-scripts/rebuild_daily_features_acc2.py   # untracked local tool
 scripts/operations/swarm_weather_fetch.py
 scripts/operations/update_db_nasa_weather.py
+scripts/operations/build_global_features.py
+scripts/operations/prune_measurements.py
+scripts/operations/aod_fill_loop.sh
 ```
 
 These can write to databases or regenerate data. They should remain in place until each one has an owner, command contract, and rollback note.
 
 ## 6. Historical Model Training, Evaluation, and Experimentation
 
-These are not part of current V12 daily inference. Their versioned names and imports point to older model generations or research workflows:
+Only these remain in the active tree (they are NOT part of the daily inference workflow, but they are maintained and runnable):
 
 ```text
-scripts/models/train_v5.py
-scripts/models/train_v6.py
-scripts/models/train_v7_experiment.py
-scripts/models/train_v8_experiment.py
-scripts/models/train_v9_xgboost.py
-scripts/models/train_v9_4_xgboost.py
-scripts/models/train_v11_aod_global.py
-scripts/models/train_full_v11.py
-scripts/models/tune_v11_per_country.py
-scripts/models/optimize_h1_optuna.py
-scripts/models/train_tri_engine_standoff.py
-scripts/models/train_models.py
-scripts/deployment/retrain_pipeline.py
-scripts/models/convert_models_to_onnx.py
-scripts/evaluation/evaluate_v11_vs_v12.py
-scripts/evaluation/evaluate_v12_only.py
-scripts/evaluation/calc_metrics.py
-scripts/evaluation/calc_metrics_blind.py
-scripts/evaluation/live_validation.py
-scripts/evaluation/revalidate_june21.py
-scripts/evaluation/v9_4_error_autopsy.py
-scripts/evaluation/plot_2x2_grid.py
-scripts/evaluation/plot_evaluation.py
-scripts/evaluation/plot_v9_forecasts.py
-scripts/evaluation/plot_v9_4_forecasts.py
-scripts/evaluation/plot_v11_forecasts.py
-scripts/evaluation/test_anomaly_june25.py
-scripts/evaluation/test_forecast.py
-scripts/evaluation/test_h1_microphysics.py
-scripts/evaluation/test_h1_v10_extremes.py
-scripts/evaluation/test_h1_v11_aod.py
-scripts/evaluation/test_long_horizons.py
-src/evaluate_v12_pure.py
-src/v12_tuning.py
-scripts/archive/research/notebooks/04-eda_full_scale.py
+scripts/evaluation/live_validation.py   # live-accuracy scoring used by the drift check
+src/evaluate_v12_pure.py                # the honest evaluation engine (Nuclear Drop + t+h + MASE)
+src/v12_tuning.py                       # Optuna/XGBoost training used for V12 retrains
 ```
 
-The active tree contains only maintained production and verification modules. Historical training/evaluation source is preserved under `scripts/archive/research/`; it is not imported or executed by production.
+Everything else in this category — `train_v5..v11`, `tune_v11_per_country`, `optimize_h1_optuna`, `convert_models_to_onnx`, `retrain_pipeline`, the v9/v11 plots and per-horizon probe tests — is archived and excluded from production imports:
+
+```text
+scripts/archive/research/models/     (13 training/tuning scripts)
+scripts/archive/research/evaluation/ (evaluation + probe scripts)
+scripts/archive/research/plots/      scripts/archive/research/notebooks/
+scripts/archive/legacy/              (predict_pipeline.py, retrain_pipeline.py)
+```
+
+`find scripts/archive -name '*.py'` gives the full list. This file stopped enumerating archived scripts individually on 2026-09-28, after an audit found nearly a third of the paths previously listed here had silently moved to archive locations — an inventory that lists files which do not exist trains readers to distrust every line in it.
+
+**Deleted 2026-09-28 — `evaluate_v11_vs_v12.py`** (was `scripts/evaluation/`, last seen in `scripts/archive/research/evaluation/`). Its V11 predictions target `date + h` but were scored against `date`'s same-day PM2.5, while V12 was scored through correct `target_date` remapping — every "V12 wins N/N" figure it produced is an artifact of the comparison, not of the models. Removed rather than archived so nobody re-runs it and re-quotes the number; `git log --diff-filter=D -- '*evaluate_v11_vs_v12.py'` recovers it if the methodology review is ever needed. Honest V12 numbers come from `src/evaluate_v12_pure.py` (Nuclear Drop isolation, strict `t+h` alignment, MASE vs persistence). V11 cross-validation metrics must never be quoted beside those.
 
 ## 7. Legacy End-to-End Path
 
 ```text
 scripts/archive/legacy/predict_pipeline.py
-scripts/models/retrain_pipeline.py
+scripts/archive/legacy/retrain_pipeline.py
 scripts/deployment/admin_dashboard.py -> predict_pipeline.py (manual admin action)
 ```
 
@@ -183,11 +165,9 @@ scripts/deployment/admin_dashboard.py -> predict_pipeline.py (manual admin actio
 | `scripts/archive/historical/fetchers/` | ARCHIVED historical fetch/merge implementations |
 | `scripts/archive/` | ARCHIVED historical, research, manual, and legacy material; excluded from production imports |
 | `scripts/deployment/` | ACTIVE deployment and admin entrypoints |
-| `scan_secrets.py` | MANUAL security scan; untracked |
-| `check_db_health*.py` | MANUAL database checks; untracked |
+| `scripts/operations/check_db_health.py`, `scripts/operations/check_db_quick.py` | MANUAL database checks; watchdog composes their signals (see RUNBOOK.md) |
+| `scripts/operations/pipeline_watchdog.py` + `scripts/deployment/com.globalaqi.watchdog.plist` + `scripts/deployment/install_watchdog.sh` | AUTONOMOUS external watchdog (launchd, see RUNBOOK.md) |
 | `query_db.py`, `test_query.py` | MANUAL local database probes; ignored/untracked state |
-| `fix_country_code.py` | UNKNOWN/MANUAL data repair helper; untracked |
-| `deploy_final.py`, `scripts/deploy_when_ready.py` | UNKNOWN/MANUAL deployment helpers; untracked |
 
 Additional tracked legacy and diagnostic scripts covered by the same classifications:
 
@@ -216,6 +196,7 @@ The historical fetchers and manual diagnostics are archived outside the active s
 | `scripts/deployment/run_cron_local.sh` | Local Mac | Pipeline `site_data/` to sibling frontend `public/data/` | ACTIVE LOCAL ALTERNATE; do not overlap |
 | `scripts/deployment/run_cron.sh` | Legacy VM candidate | VM checkout `site_data/` to frontend checkout | LEGACY CANDIDATE; verify scheduler before use/retirement |
 | `scripts/deployment/admin_dashboard.py` | Docker/systemd VM service | Manual legacy prediction path; API/admin operations | ACTIVE ADMIN ENTRYPOINT |
+| `scripts/operations/pipeline_watchdog.py` (launchd `com.globalaqi.watchdog`) | Local Mac | GitHub issue + manual workflow dispatch | AUTONOMOUS EXTERNAL WATCHDOG; the only check that fires when the hosted run never starts |
 
 The cleanup does not disable any publisher. Before changing scheduler state, record the host, scheduler definition, lock path, log path, last run, and replacement owner.
 
@@ -232,8 +213,9 @@ These files are covered by the categories above but are listed explicitly so the
 | `scripts/operations/cleanup_prediction_log.py` | MANUAL DATA MAINTENANCE utility |
 | `scripts/archive/manual/diagnostics/check_db.py`, `check_issues.py`, `check_trials.py`, `fast_etl.py`, `rewrite_pipeline.py` | MANUAL/HISTORICAL diagnostics preserved outside production |
 | `scripts/archive/historical/fetchers/fetch_nasa_power.py`, `fetch_open_meteo_aod.py`, `fetch_openmeteo_all.py`, `fetch_openmeteo_gb.py`, `merge_openmeteo_all.py`, `merge_openmeteo_gb.py` | ARCHIVED historical fetch/merge implementations; do not use for daily production |
-| `scratch/check_live_db.py`, `scratch/test_onnx_nan.py` | LOCAL EXPERIMENTS; not production or maintained pytest tests |
-| `check_db_health.py`, `check_db_health2.py`, `check_db_health_comprehensive.py`, `check_db_health_fast.py` | UNTRACKED MANUAL database checks; preserve until explicitly reviewed |
+| `scripts/operations/check_db_health.py`, `check_db_quick.py` | MANUAL database checks (see section 8) |
+
+The root-level `check_db_health2.py` / `_comprehensive.py` / `_fast.py` variants listed by older inventories are gone from disk; `scripts/operations/check_db_health.py` is the single entry point.
 
 ## 12. Safe Rules
 
