@@ -44,12 +44,14 @@ from scripts.pipeline.fetch_daily_weather import fetch_weather_batch_range
 from scripts.pipeline.fetch_daily_aod import fetch_aod_batch_range
 
 CHUNK = 200            # coordinates per multi-location call
-AOD_WINDOW_DAYS = 1    # AOD must be fetched one date at a time. Its host bills
-                       # hourly data by location-days against an *hourly* cap:
-                       # a 200-coord x 7-day call was measured to exhaust the
-                       # budget after ~3 calls ("Hourly API request limit
-                       # exceeded"), while 200 coords x 1 day is the shape the
-                       # daily pipeline has used successfully for months.
+AOD_WINDOW_DAYS = 7    # The air-quality host's cap tracks *requests*, not weighted
+                       # location-days: measured 2026-09-28, one IP was allowed ~4
+                       # successful 200-location calls per hour whether each call
+                       # covered 1 day or 7 (a weighted model predicts 25+/hour for
+                       # the 1-day shape, which never happened), and a 429 costs a
+                       # ~70s hang before it answers. A 7-day window therefore
+                       # returns ~7x the rows for the same budget (~300 KB per
+                       # response, well inside the fetcher's ~1 MB guidance).
 SLEEP = 3.0            # seconds between calls; free tier also limits calls/minute
 FAILED_SLEEP = 30.0    # cool-down after a failed call so retries cannot stampede
                        # into a self-inflicted minutely-limit breach
