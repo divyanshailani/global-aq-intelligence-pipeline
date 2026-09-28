@@ -19,6 +19,12 @@ data/fire_counts_gb.csv
 data/fire_counts_us.csv
 data/daily_features_full.parquet
 
+# Local retention dumps from scripts/operations/prune_measurements.py. Hundreds
+# of MB of gzipped CSV that exists only to make the matching TRUNCATE reloadable
+# (and to keep a copy of a table the backup script deliberately skips). Local
+# only: the OpenAQ S3 archive is the durable source for these rows.
+data/archive/
+
 # Prediction CSVs (regenerable, kept as JSON in site_data/)
 data/predictions/
 
