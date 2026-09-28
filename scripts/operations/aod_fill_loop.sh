@@ -1,16 +1,22 @@
 #!/bin/bash
 # Local AOD fill loop for the Open-Meteo air-quality host.
 #
-# Why local: that host throttles by IP and its budget only refills while the IP
-# is quiet. Measurements on 2026-09-28: a burst of four 200-location x 7-day
-# requests succeeded back-to-back after ~40 minutes of silence (5,600 rows),
-# while a loop that probed every 20 minutes with a 3-failure breaker filled
-# nothing for over an hour - repeated futile attempts kept the IP starved. So
-# the loop probes with a SINGLE request (--aod-max-failures 1) and adapts:
-# keep going while requests land, then rest and let the budget rebuild.
+# Quota model (measured 2026-09-28): the free tier allows roughly 10,000
+# weighted units per IP per DAY, where a request costs locations x days for
+# hourly variables. A 200-location x 14-day call therefore costs ~2,800 units -
+# so one IP can make only ~3-4 such calls before the host refuses *everything*,
+# including 1-location requests (verified: after a handful of batches, even a
+# 1-location x 1-day call returned 429 in 0.7s). Silence does not help; 20
+# minutes quiet and 48 minutes quiet both produced zero successes, because the
+# budget resets daily, not per hour. The daily pipeline never trips this only
+# because it calls per station (~1 unit each).
 #
-# GitHub runner IPs are shared and effectively exhausted for this host, which
-# is why the fill belongs on the owner's machine (~1.6s per call).
+# Consequences for this loop: spend the day's units in a short burst, then stay
+# quiet for hours instead of retrying into a wall. The script's breaker stops
+# after a single rejection (--aod-max-failures 1) so probing costs one attempt.
+#
+# GitHub runner IPs are separately exhausted for this host, which is why the
+# fill belongs on the owner's machine (~1.6s per call).
 #
 # Usage:  scripts/operations/aod_fill_loop.sh [start] [end]
 #         defaults to the 2026-08-09..09-24 starved window
@@ -21,6 +27,7 @@ START=${1:-2026-08-09}
 END=${2:-2026-09-24}
 LOG=logs/aod_fill.log
 PY=${PY:-python3}
+REST=${REST:-21600}     # 6h: roughly one burst per quarter of the daily budget
 
 # Station-days still missing AOD, counting distinct (station_id, date): the
 # table is grained per (station_id, date, parameter), so counting rows would
@@ -56,10 +63,10 @@ while true; do
     break
   fi
   if [ "$after" -lt "$before" ]; then
-    echo "--- progress $before -> $after: the host is allowing requests, continuing ---"
-    sleep 90
+    echo "--- progress $before -> $after: units are available, spending them ---"
+    sleep 45
   else
-    echo "--- throttled: resting 20 min so the IP's budget can refill ---"
-    sleep 1200
+    echo "--- throttled: resting $((REST / 3600))h until the daily budget resets ---"
+    sleep "$REST"
   fi
 done

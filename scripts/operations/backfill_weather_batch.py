@@ -180,9 +180,9 @@ def main():
     parser.add_argument("--dry-run", action="store_true",
                         help="Fetch + count, but write nothing to the DB")
     parser.add_argument("--skip-aod", action="store_true",
-                        help="Fill weather only. Use when the air-quality host is "
-                             "throttling this IP: every AOD attempt re-arms the "
-                             "limiter, so the weather fill cannot finish alongside it.")
+                        help="Fill weather only. The air-quality host's budget is "
+                             "tiny and only rebuilds while the IP is quiet, so give "
+                             "AOD its own run instead of sharing one.")
     parser.add_argument("--skip-weather", action="store_true",
                         help="Fill AOD only (the two hosts throttle independently).")
     parser.add_argument("--aod-max-failures", type=int, default=MAX_CONSECUTIVE_FAILURES,
