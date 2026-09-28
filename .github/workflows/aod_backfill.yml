@@ -54,6 +54,15 @@ jobs:
   aod-backfill:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      # One runner = one egress IP = its own daily allowance on the
+      # air-quality host, so shards add throughput instead of queueing behind a
+      # single budget. Kept at 4 because the concurrent get_missing queries hit
+      # a 1-vCore production database; raise only if the DB stays responsive.
+      max-parallel: 4
+      matrix:
+        shard: [0, 1, 2, 3]
     steps:
       - name: Checkout pipeline
         uses: actions/checkout@v4
@@ -76,4 +85,6 @@ jobs:
           python -u scripts/operations/backfill_weather_batch.py \
             --start "${{ inputs.start }}" \
             --end "${{ inputs.end }}" \
-            --skip-weather
+            --skip-weather \
+            --aod-max-failures 1 \
+            --shard "${{ matrix.shard }}/4"

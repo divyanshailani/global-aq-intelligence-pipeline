@@ -185,6 +185,12 @@ def main():
                              "AOD its own run instead of sharing one.")
     parser.add_argument("--skip-weather", action="store_true",
                         help="Fill AOD only (the two hosts throttle independently).")
+    parser.add_argument("--shard", metavar="I/N",
+                        help="Process only coordinates whose index mod N is I. The "
+                             "air-quality host allows a fixed number of weighted "
+                             "requests per IP per day, so running N shards on N "
+                             "machines (or N CI runners) multiplies the fill rate "
+                             "instead of queueing behind one allowance.")
     parser.add_argument("--aod-max-failures", type=int, default=MAX_CONSECUTIVE_FAILURES,
                         help="Stop the AOD phase after this many consecutive rejected "
                              "requests (default %(default)s). Use 1 when probing a host "
@@ -205,6 +211,15 @@ def main():
 
     dates_by_coord, sids_by_coord, n_rows = get_missing(conn, args.start, args.end)
     coords = sorted(dates_by_coord)
+    if args.shard:
+        # i/N: keep only the coordinates this worker owns. The air-quality host
+        # meters a daily allowance per IP, so fanning one gap across several
+        # machines (each with its own IP) multiplies throughput; the split is by
+        # coordinate so two workers never fetch the same rows.
+        i, n = (int(x) for x in args.shard.split("/"))
+        coords = [c for k, c in enumerate(coords) if k % n == i]
+        n_rows = sum(len(dates_by_coord[c]) for c in coords)
+        print(f"Shard {i}/{n}: {n_rows:,} station-days on {len(coords):,} coordinates")
     if not coords:
         print(f"Nothing to backfill in {args.start} .. {args.end}.")
         conn.close()
