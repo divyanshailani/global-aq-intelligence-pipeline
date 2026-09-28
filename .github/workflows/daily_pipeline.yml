@@ -256,6 +256,23 @@ jobs:
               with conn.cursor() as cur:
                   cur.execute("SELECT 1")
                   assert cur.fetchone() == (1,)
+                  # Storage guard: Azure storage auto-grow is DISABLED on this
+                  # server, so crossing the provisioned cap turns every write
+                  # (collection, ETL, predictions) into an error. Azure's 7-day
+                  # PITR cannot undo that; making the level visible on every run
+                  # is the cheap half of the safety net while the measurement
+                  # tables are archived and pruned.
+                  cur.execute("SELECT pg_database_size(current_database())")
+                  used_gib = cur.fetchone()[0] / 1024 ** 3
+          cap_gib = float(os.environ.get("AZURE_STORAGE_GIB", "32"))
+          pct = 100 * used_gib / cap_gib
+          print(f"Database storage: {used_gib:.2f} GiB of {cap_gib:.0f} GiB ({pct:.0f}%)")
+          if pct >= 85:
+              print(
+                  f"::warning::Database storage is {pct:.0f}% of the {cap_gib:.0f} GiB "
+                  f"provisioned cap and auto-grow is off. Archive and prune the "
+                  f"measurement tables (clean_measurements is the bulk)."
+              )
           print("Final DB health check passed")
           PY
 
