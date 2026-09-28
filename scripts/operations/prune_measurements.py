@@ -211,9 +211,12 @@ def verify(cutoff: str) -> None:
         for t in ("clean_measurements", "raw_measurements", "daily_features"):
             cur.execute(f"SELECT pg_size_pretty(pg_total_relation_size('{t}'))")
             print(f"  {t:22} {cur.fetchone()[0]}")
+        # 32*1024*1024*1024 is 34359738368, past int32: with plain integer
+        # literals the server rejects the whole statement with
+        # NumericValueOutOfRange before computing anything.
         cur.execute("SELECT pg_size_pretty(pg_database_size(current_database())), "
                     "round(100*pg_database_size(current_database())::numeric/"
-                    "(32*1024*1024*1024), 1)")
+                    "(32::bigint*1024*1024*1024), 1)")
         size, pct = cur.fetchone()
         cur.execute("SELECT count(*) FROM daily_features")
         print(f"  daily_features rows    {cur.fetchone()[0]:,}")

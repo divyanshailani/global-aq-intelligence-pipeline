@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [12.2.1] - Measurement Retention & Storage Headroom (2026-09-28)
+
+### 🗄️ `clean_measurements` Retention: 25.6 GB → 19 GB Database
+- **Why**: `globalaqi-archive` runs with storage auto-grow **disabled** against a hard 32 GiB cap, so reaching it turns every write into an error and the 7-day PITR window cannot undo it. The database sat at 23.86 GiB (75%), `clean_measurements` alone accounting for 17 GB — 71% of it, ~48.3M rows.
+- **How**: `scripts/operations/prune_measurements.py` (`archive` → `reload` → `verify`) streams both row sets to local gzip through server-side COPY, checks each file's row count against the database and records sha256 digests, then TRUNCATEs and reloads only the retained window. An in-place rewrite (VACUUM FULL or create-and-swap) was rejected on arithmetic: the old 17 GB plus the retained copy would coexist at ~34 GB, past the cap.
+- **Cutoff**: `2026-06-26`, derived from `src/features.py`'s 90-day lookback so that no row the ETL can reach is removed. Older rows stay rebuildable from the OpenAQ S3 archive, and a local gzipped copy is kept.
+- **Result**: 17,625,734 rows pruned, 30,670,836 retained; `clean_measurements` 17 GB → 13 GB, database 25.6 GB → 19 GB (≈55% of the cap).
+
+### 🐛 Retention Tooling Fixes
+- The reload's pre-flight counted rows with `count(*)` on a ~17 GB table — minutes of IO, and under autocommit it held an AccessShareLock that the TRUNCATE then queued behind (observed: a 4,025 s wait). It now reads `reltuples`.
+- A mid-run cancel left the table empty, because the TRUNCATE commits by design — holding it in one transaction with the COPY would retain the old pages until commit and exceed the cap. A failed COPY now prints the exact restore command, and a `reloaded` marker in the state file prevents a second reload from truncating an already-correct table.
+- `verify` aborted on `32*1024*1024*1024`, which exceeds int32; widened to `32::bigint`.
+- `.gitignore` now excludes `data/archive/`, so hundreds of MB of local dumps are no longer offered to git.
+
+### 🐛 Backup Cron Repair
+- `backup_db.sh` pointed at a deleted `~/Desktop` path with the wrong script name, so the weekly backup had been failing silently. The crontab now invokes `scripts/deployment/backup_db.sh` on the SSD, logging to `logs/backup_cron.log`, and dumps only the non-rebuildable tables (`raw_measurements`/`clean_measurements` are rebuilt from the OpenAQ S3 archive).
+
+### 📊 Storage Guard in CI
+- The daily workflow's advisory health step now prints GiB used against the cap and emits a `::warning::` annotation past 85%, so the level appears in every run log instead of only under inspection.
+
 ## [12.2.0] - Batch Open-Meteo Enrichment & Drift Backfill (2026-09-28)
 
 ### ⚙️ Phase 3 Weather/AOD: Per-Row → Multi-Location Batch Calls
