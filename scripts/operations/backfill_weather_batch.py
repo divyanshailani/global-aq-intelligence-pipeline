@@ -242,9 +242,13 @@ def main():
                 break
             try:
                 calls += 1
+                # tries=1: each attempt that reaches the host costs quota, and a
+                # failed one is usually a rate-limited hour, not a transient —
+                # waiting 65s inside it only delays the remaining windows. The
+                # next dispatch resumes whatever this pass could not fill.
                 result = fetch_with_retry(
                     fetch_aod_batch_range, fallback, lats_str, lons_str,
-                    lo.isoformat(), hi.isoformat(), tries=2,
+                    lo.isoformat(), hi.isoformat(), tries=1,
                     label=f"AOD {lo}..{hi} chunk {ci}")
                 for fetched, target in zip(result, aod):
                     target.update(fetched)
