@@ -1,16 +1,16 @@
 #!/bin/bash
 # Local AOD fill loop for the Open-Meteo air-quality host.
 #
-# Why local: that host's hourly budget is a handful of REQUESTS per IP
-# (~4-6 measured on 2026-09-28), independent of whether each call covers 1 day
-# or 14, and it does not refill within minutes. GitHub runner IPs are shared
-# and effectively exhausted for it, while a home IP answers a 200-location
-# call in ~1.6s - so the fill belongs on the owner's machine, not in CI.
+# Why local: that host throttles by IP and its budget only refills while the IP
+# is quiet. Measurements on 2026-09-28: a burst of four 200-location x 7-day
+# requests succeeded back-to-back after ~40 minutes of silence (5,600 rows),
+# while a loop that probed every 20 minutes with a 3-failure breaker filled
+# nothing for over an hour - repeated futile attempts kept the IP starved. So
+# the loop probes with a SINGLE request (--aod-max-failures 1) and adapts:
+# keep going while requests land, then rest and let the budget rebuild.
 #
-# Each pass fetches only rows that are still NULL (get_missing), stops on the
-# script's 3-consecutive-failure breaker once the hour's budget is gone, then
-# waits 20 minutes and tries again. Progress is therefore monotonic and the
-# loop exits by itself when the range has no AOD holes left.
+# GitHub runner IPs are shared and effectively exhausted for this host, which
+# is why the fill belongs on the owner's machine (~1.6s per call).
 #
 # Usage:  scripts/operations/aod_fill_loop.sh [start] [end]
 #         defaults to the 2026-08-09..09-24 starved window
@@ -22,6 +22,9 @@ END=${2:-2026-09-24}
 LOG=logs/aod_fill.log
 PY=${PY:-python3}
 
+# Station-days still missing AOD, counting distinct (station_id, date): the
+# table is grained per (station_id, date, parameter), so counting rows would
+# overstate the gap and keep the loop alive after the real holes were gone.
 remaining() {
   "$PY" - "$START" "$END" <<'PY'
 import sys
@@ -33,17 +36,9 @@ from src.config import DB_CONFIG
 start, end = sys.argv[1], sys.argv[2]
 conn = psycopg2.connect(**DB_CONFIG)
 cur = conn.cursor()
-# Mirror get_missing's predicate: station-days that still have an AOD hole AND
-# coordinates to fetch them with. Classifying by row instead of by
-# (station_id, date) would overcount - daily_features is grained per
-# (station_id, date, parameter), so a station-day holds a pm25 row and often a
-# pm10 row that share the same weather/AOD values - and would keep the loop
-# alive after the real holes were gone.
 cur.execute(
-    "SELECT count(*) FROM daily_features df JOIN stations s ON df.station_id = s.id "
-    "WHERE df.om_aerosol_optical_depth IS NULL "
-    "AND s.latitude IS NOT NULL AND s.longitude IS NOT NULL "
-    "AND df.date BETWEEN %s AND %s",
+    "SELECT count(DISTINCT (station_id, date)) FROM daily_features "
+    "WHERE om_aerosol_optical_depth IS NULL AND date BETWEEN %s AND %s",
     (start, end),
 )
 print(cur.fetchone()[0])
@@ -51,15 +46,20 @@ PY
 }
 
 while true; do
-  echo "=== pass $(date -u +%FT%TZ) ==="
+  before=$(remaining)
+  echo "=== pass $(date -u +%FT%TZ) — holes: $before ==="
   "$PY" -u scripts/operations/backfill_weather_batch.py \
-      --start "$START" --end "$END" --skip-weather 2>&1 | tee -a "$LOG"
-  n=$(remaining)
-  echo "remaining AOD nulls in $START..$END: $n"
-  if [ "$n" = "0" ]; then
+      --start "$START" --end "$END" --skip-weather --aod-max-failures 1 2>&1 | tee -a "$LOG"
+  after=$(remaining)
+  if [ "$after" = "0" ]; then
     echo LOOP_DONE_GAP_CLOSED
     break
   fi
-  echo "--- waiting 20 min for the hourly quota to refill ---"
-  sleep 1200
+  if [ "$after" -lt "$before" ]; then
+    echo "--- progress $before -> $after: the host is allowing requests, continuing ---"
+    sleep 90
+  else
+    echo "--- throttled: resting 20 min so the IP's budget can refill ---"
+    sleep 1200
+  fi
 done

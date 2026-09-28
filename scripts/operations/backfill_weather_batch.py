@@ -185,6 +185,12 @@ def main():
                              "limiter, so the weather fill cannot finish alongside it.")
     parser.add_argument("--skip-weather", action="store_true",
                         help="Fill AOD only (the two hosts throttle independently).")
+    parser.add_argument("--aod-max-failures", type=int, default=MAX_CONSECUTIVE_FAILURES,
+                        help="Stop the AOD phase after this many consecutive rejected "
+                             "requests (default %(default)s). Use 1 when probing a host "
+                             f"that penalises attempts: the air-quality budget refills "
+                             f"only while the IP is quiet, so a burst of futile retries "
+                             f"is what keeps it starved.")
     args = parser.parse_args()
 
     raw_keys = re.sub(r"[\r\n]+", ",", os.getenv("OPENAQ_KEYS", ""))
@@ -260,9 +266,9 @@ def main():
                 consecutive_failures += 1
                 print(f"  ⚠️ AOD {lo}..{hi} chunk {ci}/{n_chunks} "
                       f"({len(chunk)} locations) failed, AOD left NULL: {str(e)[:120]}")
-                if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-                    print(f"  ⛔ {consecutive_failures} consecutive AOD failures — "
-                          f"the hourly budget is exhausted. Stopping the AOD phase; "
+                if consecutive_failures >= args.aod_max_failures:
+                    print(f"  ⛔ {consecutive_failures} consecutive AOD rejections — "
+                          f"this IP is throttled. Stopping the AOD phase; "
                           f"everything written is committed. Run again later with the "
                           f"same range to resume where this stopped.")
                     aod_exhausted = True
