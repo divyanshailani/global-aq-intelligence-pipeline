@@ -33,9 +33,17 @@ from src.config import DB_CONFIG
 start, end = sys.argv[1], sys.argv[2]
 conn = psycopg2.connect(**DB_CONFIG)
 cur = conn.cursor()
+# Mirror get_missing's predicate: station-days that still have an AOD hole AND
+# coordinates to fetch them with. Classifying by row instead of by
+# (station_id, date) would overcount - daily_features is grained per
+# (station_id, date, parameter), so a station-day holds a pm25 row and often a
+# pm10 row that share the same weather/AOD values - and would keep the loop
+# alive after the real holes were gone.
 cur.execute(
-    "SELECT count(*) FROM daily_features WHERE date BETWEEN %s AND %s "
-    "AND om_aerosol_optical_depth IS NULL",
+    "SELECT count(*) FROM daily_features df JOIN stations s ON df.station_id = s.id "
+    "WHERE df.om_aerosol_optical_depth IS NULL "
+    "AND s.latitude IS NOT NULL AND s.longitude IS NOT NULL "
+    "AND df.date BETWEEN %s AND %s",
     (start, end),
 )
 print(cur.fetchone()[0])
