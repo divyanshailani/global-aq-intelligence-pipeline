@@ -139,24 +139,44 @@ def reload_keep(cutoff: str) -> None:
     if sha256(kept) != state["sha256"]["kept"]:
         raise SystemExit("kept archive digest changed - refusing to reload")
 
+    if state.get("reloaded"):
+        raise SystemExit(f"state says this archive was already reloaded at "
+                         f"{state['reloaded']['at']} - refusing to truncate again")
+
     conn = connect()
     with conn.cursor() as cur:
-        cur.execute("SELECT count(*) FROM clean_measurements")
-        before = cur.fetchone()[0]
+        # reltuples is an estimate and costs nothing. The pre-load count used to
+        # be an exact count(*): a full scan of ~17 GB, minutes of IO on this box,
+        # and - under autocommit - it held an AccessShareLock that the TRUNCATE
+        # below had to queue behind. The archive stage already recorded both row
+        # counts, so re-scanning the table proved nothing.
+        cur.execute("SELECT reltuples::bigint FROM pg_class "
+                    "WHERE oid = 'clean_measurements'::regclass")
+        approx = cur.fetchone()[0]
         cur.execute("SELECT pg_size_pretty(pg_database_size(current_database()))")
         size_before = cur.fetchone()[0]
-    print(f"reload: clean_measurements has {before:,} rows, database {size_before}")
+    print(f"reload: clean_measurements ~{approx:,} rows (estimate, not a scan), "
+          f"database {size_before}, archive holds {state['kept_rows']:,}")
 
     t0 = time.time()
     with conn.cursor() as cur:
         cur.execute("TRUNCATE clean_measurements")
-    print(f"  truncated ({time.time() - t0:.0f}s) - all pages released", flush=True)
+    print(f"  truncated ({time.time() - t0:.0f}s) - all pages released. The table is EMPTY "
+          f"until the load finishes: autocommit here is deliberate, because holding the "
+          f"TRUNCATE open in one transaction with the COPY would retain the old pages until "
+          f"commit and exceed the 32 GiB cap.", flush=True)
 
     t0 = time.time()
-    with gzip.open(kept, "rt") as fh, conn.cursor() as cur:
-        cur.copy_expert(
-            f"COPY clean_measurements ({COLUMNS}) FROM STDIN WITH (FORMAT csv)", fh, size=1 << 20
-        )
+    try:
+        with gzip.open(kept, "rt") as fh, conn.cursor() as cur:
+            cur.copy_expert(
+                f"COPY clean_measurements ({COLUMNS}) FROM STDIN WITH (FORMAT csv)", fh, size=1 << 20
+            )
+    except Exception:
+        print("LOAD FAILED - clean_measurements is empty. Restore it with:\n"
+              f"    python3 scripts/operations/prune_measurements.py reload --cutoff {cutoff}\n"
+              f"  The kept archive and its recorded digest are untouched: {kept}", flush=True)
+        raise
     print(f"  reloaded {state['kept_rows']:,} rows ({time.time() - t0:.0f}s)", flush=True)
 
     with conn.cursor() as cur:
@@ -170,6 +190,14 @@ def reload_keep(cutoff: str) -> None:
     print(f"reload complete: {rows:,} rows, database {size}")
     if rows != state["kept_rows"]:
         raise SystemExit(f"row count mismatch after reload: {rows:,} != {state['kept_rows']:,}")
+    state["reloaded"] = {
+        "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "rows": rows,
+        "database": size,
+    }
+    with open(STATE, "w") as fh:
+        json.dump(state, fh, indent=2)
+    print(f"state updated -> {STATE}")
 
 
 def verify(cutoff: str) -> None:
