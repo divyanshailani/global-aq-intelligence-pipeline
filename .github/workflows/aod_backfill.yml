@@ -8,7 +8,10 @@ name: Global AQI AOD Backfill
 # --skip-aod for those.
 #
 # Run manually with the date range that needs filling (the script is
-# resumable and only fetches rows still missing AOD).
+# resumable and only fetches rows still missing AOD). The air-quality host's
+# hourly budget is small relative to a multi-week hole, so expect to dispatch
+# this more than once: each run fills what the budget allows, stops cleanly on
+# its own circuit breaker, and the next run resumes from what is still NULL.
 
 on:
   workflow_dispatch:

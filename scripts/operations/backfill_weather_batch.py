@@ -44,11 +44,17 @@ from scripts.pipeline.fetch_daily_weather import fetch_weather_batch_range
 from scripts.pipeline.fetch_daily_aod import fetch_aod_batch_range
 
 CHUNK = 200            # coordinates per multi-location call
-AOD_WINDOW_DAYS = 7    # AOD is hourly: 7-day windows return ~850 KB for 200
-                       # coordinates, measured to pass the limiter cleanly.
+AOD_WINDOW_DAYS = 1    # AOD must be fetched one date at a time. Its host bills
+                       # hourly data by location-days against an *hourly* cap:
+                       # a 200-coord x 7-day call was measured to exhaust the
+                       # budget after ~3 calls ("Hourly API request limit
+                       # exceeded"), while 200 coords x 1 day is the shape the
+                       # daily pipeline has used successfully for months.
 SLEEP = 3.0            # seconds between calls; free tier also limits calls/minute
 FAILED_SLEEP = 30.0    # cool-down after a failed call so retries cannot stampede
                        # into a self-inflicted minutely-limit breach
+MAX_CONSECUTIVE_FAILURES = 3   # stop a phase once the hourly budget is clearly
+                               # gone instead of grinding 65s retries for hours
 
 UPDATE_SQL = """
     UPDATE daily_features
@@ -203,6 +209,8 @@ def main():
     written = 0
     failed_calls = 0
     calls = 0
+    consecutive_failures = 0
+    aod_exhausted = False
 
     for ci, c0 in enumerate(range(0, len(coords), CHUNK), 1):
         chunk = coords[c0:c0 + CHUNK]
@@ -230,6 +238,8 @@ def main():
             time.sleep(SLEEP + random.uniform(0, 1.0))
 
         for lo, hi in chunk_dates(days, AOD_WINDOW_DAYS) if not args.skip_aod else []:
+            if aod_exhausted:
+                break
             try:
                 calls += 1
                 result = fetch_with_retry(
@@ -238,10 +248,18 @@ def main():
                     label=f"AOD {lo}..{hi} chunk {ci}")
                 for fetched, target in zip(result, aod):
                     target.update(fetched)
+                consecutive_failures = 0
             except Exception as e:
                 failed_calls += 1
+                consecutive_failures += 1
                 print(f"  ⚠️ AOD {lo}..{hi} chunk {ci}/{n_chunks} "
                       f"({len(chunk)} locations) failed, AOD left NULL: {str(e)[:120]}")
+                if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                    print(f"  ⛔ {consecutive_failures} consecutive AOD failures — "
+                          f"the hourly budget is exhausted. Stopping the AOD phase; "
+                          f"everything written is committed. Run again later with the "
+                          f"same range to resume where this stopped.")
+                    aod_exhausted = True
                 time.sleep(FAILED_SLEEP)
             time.sleep(SLEEP + random.uniform(0, 1.0))
 
