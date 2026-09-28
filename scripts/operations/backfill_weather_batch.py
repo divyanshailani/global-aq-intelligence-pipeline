@@ -1,33 +1,32 @@
 #!/usr/bin/env python3
 """
 One-off batch backfill of missing Open-Meteo weather + AOD for a date range,
-plus a SQL repair of the frozen rolling features (rolling_3day_precip,
-aod_volatility_index) that were computed over the NULL values.
+plus a forced recompute of the derived rolling features (rolling_3day_precip,
+aod_volatility_index) that were previously computed over NULL inputs.
 
 Background:
   Since ~2026-07-24 the daily pipeline hit Open-Meteo's free-tier limits
   (per-row fetching, 10K calls/day IP cap) and left om_* weather columns
   NULL in daily_features. XGBoost treats NULL as NaN, so models silently
-  lost their weather/AOD features. This script:
+  lost their weather/AOD features.
 
-    1. Finds distinct (date, station_id, lat, lon) rows with NULL weather.
-    2. Fetches weather + AOD via multi-location batch Open-Meteo calls
-       (~250 coordinates per call; archive API for dates >7 days old,
-       forecast API for recent dates).
-    3. Overwrite-updates only the rows that still have NULL om_*.
-    4. Re-runs the pipeline's Phase 4 rolling SQL for all rows since
-       --repair-cutoff so rolling features are computed over real data.
+Why this fetches per-coordinate RANGES and not per date:
+  Open-Meteo weights a call by locations x variables x time span
+  (open-meteo.com/en/terms). One date at a time costs ~V/10 weighted calls
+  per coordinate-day; a >=7 day range costs ~V/70. For the 2026-08-09..09-24
+  gap the per-date strategy needs ~29k weighted calls (three days of the free
+  tier) while ranges need ~4k (under half of one day) — which is exactly why
+  the per-date runs kept dying on 429s partway through the gap.
 
-Defaults cover the observed gap: 2026-07-25 .. 2026-09-24.
 Run from the repo root:
-  python3 scripts/operations/backfill_weather_batch.py --start 2026-07-25 --end 2026-09-24
-  python3 scripts/operations/backfill_weather_batch.py --start 2026-09-22 --end 2026-09-23 --dry-run
+  python3 scripts/operations/backfill_weather_batch.py --start 2026-08-09 --end 2026-09-24
+  python3 scripts/operations/backfill_weather_batch.py --start 2026-08-09 --end 2026-09-24 --dry-run
 """
 
 import argparse
 import os
-import re
 import random
+import re
 import sys
 import time
 from collections import defaultdict
@@ -40,19 +39,23 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from src.config import DB_CONFIG  # loads .env automatically
 from src.api_fallback_manager import ApiFallbackManager
-from scripts.pipeline.fetch_daily_weather import fetch_weather_batch_for_date
-from scripts.pipeline.fetch_daily_aod import fetch_aod_batch_for_date
+from src.features import build_advanced_weather_features
+from scripts.pipeline.fetch_daily_weather import fetch_weather_batch_range
+from scripts.pipeline.fetch_daily_aod import fetch_aod_batch_range
 
-CHUNK = 250  # coordinates per multi-location call (URL-length limit ~300)
-SLEEP = 3.0   # seconds between chunks — Open-Meteo free tier rate-limits hard
-MAX_CONSECUTIVE_FAILURES = 5  # circuit breaker: stop the date if the tier is saturated
+CHUNK = 200            # coordinates per multi-location call
+AOD_WINDOW_DAYS = 7    # AOD is hourly: 7-day windows return ~850 KB for 200
+                       # coordinates, measured to pass the limiter cleanly.
+SLEEP = 3.0            # seconds between calls; free tier also limits calls/minute
+FAILED_SLEEP = 30.0    # cool-down after a failed call so retries cannot stampede
+                       # into a self-inflicted minutely-limit breach
 
 UPDATE_SQL = """
     UPDATE daily_features
-    SET om_temperature = %s,
-        om_wind_speed = %s,
-        om_precipitation = %s,
-        om_aerosol_optical_depth = %s
+    SET om_temperature = COALESCE(%s, om_temperature),
+        om_wind_speed = COALESCE(%s, om_wind_speed),
+        om_precipitation = COALESCE(%s, om_precipitation),
+        om_aerosol_optical_depth = COALESCE(%s, om_aerosol_optical_depth)
     WHERE station_id = %s AND date = %s
       AND (om_temperature IS NULL
            OR om_precipitation IS NULL
@@ -61,7 +64,11 @@ UPDATE_SQL = """
 
 
 def get_missing(conn, start: str, end: str):
-    """Distinct station-days with NULL weather in [start, end], grouped by date."""
+    """Missing station-days, indexed by coordinate.
+
+    Returns (dates_by_coord, sids_by_coord, n_station_days). Weather is fetched
+    per coordinate, so one fetch serves every station sitting on it.
+    """
     with conn.cursor() as cur:
         cur.execute("""
             SELECT DISTINCT df.date, df.station_id, s.latitude, s.longitude
@@ -73,18 +80,27 @@ def get_missing(conn, start: str, end: str):
               AND s.latitude IS NOT NULL
               AND s.longitude IS NOT NULL
               AND df.date BETWEEN %s::date AND %s::date
-            ORDER BY df.date, df.station_id
         """, (start, end))
         rows = cur.fetchall()
 
-    by_date = defaultdict(list)
+    dates_by_coord = defaultdict(set)
+    sids_by_coord = defaultdict(set)
     for dt, sid, lat, lon in rows:
-        by_date[dt].append((sid, lat, lon))
-    return by_date
+        dates_by_coord[(lat, lon)].add(dt)
+        sids_by_coord[(lat, lon)].add(sid)
+    return dates_by_coord, sids_by_coord, len(rows)
 
 
-def fetch_with_retry(fetcher, *args, tries: int = 4, label: str = ""):
-    """Run a batch fetch with exponential backoff on 429s/overloaded errors."""
+def fetch_with_retry(fetcher, *args, tries: int = 3, label: str = ""):
+    """Run a range fetch, waiting out Open-Meteo's minutely window on 429s.
+
+    Open-Meteo answers 429 with "Minutely API request limit exceeded" (~600
+    calls/min). Retrying inside that window only deepens the hole: short nested
+    retries keep the window saturated and every later call fails too, which is
+    how an earlier version of this script stalled for 40 minutes. So the ladder
+    makes exactly one request per attempt and waits >=65s, which clears the
+    window regardless of what a concurrent caller is doing.
+    """
     last = None
     for attempt in range(tries):
         try:
@@ -93,7 +109,7 @@ def fetch_with_retry(fetcher, *args, tries: int = 4, label: str = ""):
             last = e
             msg = str(e)
             if "429" in msg or "Overloaded" in msg or "Timeout" in msg:
-                delay = min(180, 15 * (2 ** attempt)) + random.uniform(0, 5)
+                delay = min(150, 65 * (attempt + 1)) + random.uniform(0, 5)
                 print(f"    retry {attempt + 1}/{tries} for {label} "
                       f"in {delay:.0f}s ({msg[:90]})")
                 time.sleep(delay)
@@ -102,199 +118,179 @@ def fetch_with_retry(fetcher, *args, tries: int = 4, label: str = ""):
     raise last
 
 
-def repair_rolling(conn, cutoff: str):
-    """Re-run the pipeline's Phase 4 rolling SQL for rows still frozen on
-    NULL inputs (or frozen pre-backfill). Same windows/semantics as
-    src/features.py:build_advanced_weather_features, scoped by date.
+def endpoint_regimes(days):
+    """Split sorted dates into (start, end) spans per Open-Meteo endpoint.
+
+    The archive API serves dates more than 7 days old, the forecast API the
+    rest; the fetchers pick the endpoint from the span's start date, so the two
+    regimes must never share a call.
     """
-    sql = """
-        WITH rolling_data AS (
-            SELECT station_id, date, parameter,
-                   SUM(om_precipitation) OVER (
-                       PARTITION BY station_id, parameter
-                       ORDER BY date
-                       ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING
-                   ) AS roll_3_precip,
-                   STDDEV(om_aerosol_optical_depth) OVER (
-                       PARTITION BY station_id, parameter
-                       ORDER BY date
-                       ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING
-                   ) AS aod_vol
-            FROM daily_features
-            WHERE date >= %s::date
-        )
-        UPDATE daily_features df
-        SET rolling_3day_precip = COALESCE(rd.roll_3_precip, 0),
-            aod_volatility_index = COALESCE(rd.aod_vol, 0)
-        FROM rolling_data rd
-        WHERE df.station_id = rd.station_id
-          AND df.date = rd.date
-          AND df.parameter = rd.parameter
-          AND (df.rolling_3day_precip IS NULL
-               OR df.aod_volatility_index IS NULL)
-    """
-    with conn.cursor() as cur:
-        cur.execute(sql, (cutoff,))
-        print(f"  🔄 Rolling repair ({cutoff} onward): {cur.rowcount} rows updated")
+    cutoff = date.today() - timedelta(days=7)
+    spans = []
+    for regime, group in (("archive", [d for d in days if d < cutoff]),
+                          ("forecast", [d for d in days if d >= cutoff])):
+        if group:
+            spans.append((group[0], group[-1], regime))
+    return spans
+
+
+def chunk_dates(days, size):
+    """Consecutive spans of at most `size` dates (an AOD call cannot span years)."""
+    spans = []
+    for i in range(0, len(days), size):
+        win = days[i:i + size]
+        spans.append((win[0], win[-1]))
+    return spans
+
+
+def write_updates(conn, updates, label):
+    """execute_batch with one reconnect retry. Returns (conn, rows_written)."""
+    if not updates:
+        return conn, 0
+    for attempt in (1, 2):
+        try:
+            with conn.cursor() as cur:
+                execute_batch(cur, UPDATE_SQL, updates, page_size=500)
+            conn.commit()
+            return conn, len(updates)
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+            print(f"  ⚠️ {label} DB write failed (attempt {attempt}/2): {e}")
+            time.sleep(5)
+            try:
+                conn.rollback()
+            except psycopg2.Error:
+                pass
+            conn = psycopg2.connect(**DB_CONFIG)
+            print("  DB reconnected.")
+    return conn, 0
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--start", required=True, help="YYYY-MM-DD, inclusive")
     parser.add_argument("--end", required=True, help="YYYY-MM-DD, inclusive")
-    parser.add_argument("--repair-cutoff", default=None,
-                        help="Recompute rolling features for rows >= this date "
-                             "(default: start - 7 days)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Fetch + count, but write nothing to the DB")
+    parser.add_argument("--skip-aod", action="store_true",
+                        help="Fill weather only. Use when the air-quality host is "
+                             "throttling this IP: every AOD attempt re-arms the "
+                             "limiter, so the weather fill cannot finish alongside it.")
+    parser.add_argument("--skip-weather", action="store_true",
+                        help="Fill AOD only (the two hosts throttle independently).")
     args = parser.parse_args()
-
-    repair_cutoff = args.repair_cutoff or (
-        datetime.strptime(args.start, "%Y-%m-%d").date() - timedelta(days=7)
-    ).isoformat()
 
     raw_keys = re.sub(r"[\r\n]+", ",", os.getenv("OPENAQ_KEYS", ""))
     clean_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
-    fallback = ApiFallbackManager(openaq_keys=clean_keys, max_retries=3, base_backoff=2.0)
+    # max_retries=1: the manager must not run its own fast retry loop. Nesting it
+    # under fetch_with_retry turns one 429 into a burst that saturates
+    # Open-Meteo's minutely window and fails every later call.
+    fallback = ApiFallbackManager(openaq_keys=clean_keys, max_retries=1, base_backoff=2.0)
 
     conn = psycopg2.connect(**DB_CONFIG)
     print(f"DB: {DB_CONFIG['host']}/{DB_CONFIG['dbname']}")
 
-    by_date = get_missing(conn, args.start, args.end)
-    total = sum(len(v) for v in by_date.values())
-    n_dates = len(by_date)
-    print(f"Missing station-days: {total:,} across {n_dates} days "
-          f"({args.start} .. {args.end})")
-    if total == 0:
-        print("Nothing to backfill.")
+    dates_by_coord, sids_by_coord, n_rows = get_missing(conn, args.start, args.end)
+    coords = sorted(dates_by_coord)
+    if not coords:
+        print(f"Nothing to backfill in {args.start} .. {args.end}.")
         conn.close()
         return
+    n_chunks = (len(coords) + CHUNK - 1) // CHUNK
+    print(f"Missing station-days: {n_rows:,} on {len(coords):,} coordinates "
+          f"({args.start} .. {args.end}) → {n_chunks} chunks of {CHUNK}")
 
-    updates = []
-    failed_chunks = 0
-    written = 0
-    db_reconnects = 0
-    wall_dates = 0
     t0 = time.time()
+    written = 0
+    failed_calls = 0
+    calls = 0
 
-    for i, dt in enumerate(sorted(by_date), 1):
-        target = dt.isoformat()
-        coords = sorted({(lat, lon) for _, lat, lon in by_date[dt]})
-        coord_to_sids = defaultdict(list)
-        for sid, lat, lon in by_date[dt]:
-            coord_to_sids[(lat, lon)].append(sid)
+    for ci, c0 in enumerate(range(0, len(coords), CHUNK), 1):
+        chunk = coords[c0:c0 + CHUNK]
+        days = sorted(set().union(*(dates_by_coord[c] for c in chunk)))
+        lats_str = ",".join(str(c[0]) for c in chunk)
+        lons_str = ",".join(str(c[1]) for c in chunk)
 
-        date_updates = []
-        consecutive_failures = 0
-        date_failures = 0
+        weather = [{} for _ in chunk]   # per coordinate: date -> feature dict
+        aod = [{} for _ in chunk]       # per coordinate: date -> mean AOD
 
-        for c in range(0, len(coords), CHUNK):
-            chunk = coords[c:c + CHUNK]
-            lats_str = ",".join(str(lat) for lat, _ in chunk)
-            lons_str = ",".join(str(lon) for _, lon in chunk)
+        for lo, hi, regime in [] if args.skip_weather else endpoint_regimes(days):
             try:
-                w_list = fetch_with_retry(
-                    fetch_weather_batch_for_date, fallback, lats_str, lons_str, target,
-                    label=f"{target} weather chunk {c // CHUNK + 1}")
+                calls += 1
+                result = fetch_with_retry(
+                    fetch_weather_batch_range, fallback, lats_str, lons_str,
+                    lo.isoformat(), hi.isoformat(),
+                    label=f"weather {regime} {lo}..{hi} chunk {ci}")
+                for fetched, target in zip(result, weather):
+                    target.update(fetched)
             except Exception as e:
-                failed_chunks += 1
-                date_failures += 1
-                consecutive_failures += 1
-                print(f"  ⚠️ {target} weather chunk {c // CHUNK + 1} "
-                      f"({len(chunk)} locations) failed: {e}")
-                if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-                    print(f"  ⛔ {target}: {consecutive_failures} consecutive "
-                          f"failed chunks — cooling down 120s (free tier saturated)")
-                    time.sleep(120)
-                    consecutive_failures = 0
-                time.sleep(SLEEP + random.uniform(0, 1.0))
-                continue
-            try:
-                aod_list = fetch_with_retry(
-                    fetch_aod_batch_for_date, fallback, lats_str, lons_str, target,
-                    tries=2, label=f"{target} AOD chunk {c // CHUNK + 1}")
-            except Exception as e:
-                failed_chunks += 1
-                print(f"  ⚠️ {target} AOD chunk {c // CHUNK + 1} "
-                      f"({len(chunk)} locations) failed, AOD left NULL: {str(e)[:90]}")
-                aod_list = [None] * len(chunk)
-            consecutive_failures = 0
-            for (lat, lon), w, a in zip(chunk, w_list, aod_list):
-                for sid in coord_to_sids[(lat, lon)]:
-                    date_updates.append((
-                        float(w["om_temperature"]),
-                        float(w["om_wind_speed"]),
-                        float(w["om_precipitation"]),
-                        float(a["om_aerosol_optical_depth"]) if a else None,
-                        int(sid),
-                        dt,
-                    ))
-
+                failed_calls += 1
+                print(f"  ⚠️ weather {regime} {lo}..{hi} chunk {ci}/{n_chunks} "
+                      f"({len(chunk)} locations) failed: {str(e)[:120]}")
+                time.sleep(FAILED_SLEEP)
             time.sleep(SLEEP + random.uniform(0, 1.0))
 
-        updates.extend(date_updates)
+        for lo, hi in chunk_dates(days, AOD_WINDOW_DAYS) if not args.skip_aod else []:
+            try:
+                calls += 1
+                result = fetch_with_retry(
+                    fetch_aod_batch_range, fallback, lats_str, lons_str,
+                    lo.isoformat(), hi.isoformat(), tries=2,
+                    label=f"AOD {lo}..{hi} chunk {ci}")
+                for fetched, target in zip(result, aod):
+                    target.update(fetched)
+            except Exception as e:
+                failed_calls += 1
+                print(f"  ⚠️ AOD {lo}..{hi} chunk {ci}/{n_chunks} "
+                      f"({len(chunk)} locations) failed, AOD left NULL: {str(e)[:120]}")
+                time.sleep(FAILED_SLEEP)
+            time.sleep(SLEEP + random.uniform(0, 1.0))
 
-        if not args.dry_run and date_updates:
-            write_ok = False
-            for attempt in (1, 2):
-                try:
-                    with conn.cursor() as cur:
-                        execute_batch(cur, UPDATE_SQL, date_updates, page_size=1000)
-                    conn.commit()
-                    write_ok = True
-                    break
-                except psycopg2.OperationalError as e:
-                    print(f"  ⚠️ {target} DB write failed (attempt {attempt}/2): {e}")
-                    time.sleep(5)
-                    try:
-                        conn.rollback()
-                    except psycopg2.Error:
-                        pass
-                    conn = psycopg2.connect(**DB_CONFIG)
-                    db_reconnects += 1
-                    print("  DB reconnected.")
-            if write_ok:
-                written += len(date_updates)
-                print(f"  [{i}/{n_dates}] {target}: {len(coords)} coords, "
-                      f"{len(date_updates):,} rows written this date, "
-                      f"{written:,} cumulative ({time.time() - t0:.0f}s elapsed)")
-            else:
-                print(f"  ⚠️ {target}: {len(date_updates):,} rows fetched but NOT "
-                      f"written (DB write failed twice)")
+        updates = []
+        for i, coord in enumerate(chunk):
+            for day in dates_by_coord[coord]:
+                iso = day.isoformat()
+                w = weather[i].get(iso)
+                a = aod[i].get(iso)
+                if w is None and a is None:
+                    continue
+                for sid in sids_by_coord[coord]:
+                    updates.append((
+                        w["om_temperature"] if w else None,
+                        w["om_wind_speed"] if w else None,
+                        w["om_precipitation"] if w else None,
+                        a,
+                        int(sid),
+                        day,
+                    ))
+
+        label = f"chunk {ci}/{n_chunks}"
+        if args.dry_run:
+            print(f"  [{ci}/{n_chunks}] {len(chunk)} coords, {len(days)} dates, "
+                  f"{len(updates):,} rows fetched ({time.time() - t0:.0f}s elapsed)")
+            written += len(updates)
         else:
-            print(f"  [{i}/{n_dates}] {target}: {len(coords)} coords, "
-                  f"{len(date_updates):,} fetched ({time.time() - t0:.0f}s elapsed)")
+            conn, n = write_updates(conn, updates, label)
+            written += n
+            print(f"  [{ci}/{n_chunks}] {len(chunk)} coords, {len(days)} dates, "
+                  f"{n:,} rows written this chunk, {written:,} cumulative "
+                  f"({time.time() - t0:.0f}s elapsed)")
 
-        if (not args.dry_run and not date_updates and date_failures >= 2):
-            wall_dates += 1
-            if wall_dates >= 3:
-                print(f"\n⛔ QUOTA WALL at {target}: 3 consecutive dates "
-                      f"fully failed — free tier exhausted for now. Stopping "
-                      f"early; re-run the same command later to resume "
-                      f"(everything written so far is committed).")
-                break
-        else:
-            wall_dates = 0
-
-    print(f"\nFetched {len(updates):,} station-day weather rows, "
-          f"{failed_chunks} failed chunks, {db_reconnects} DB reconnects.")
+    print(f"\nFetched {written:,} station-day rows from {calls} API calls, "
+          f"{failed_calls} failed calls ({time.time() - t0:.0f}s).")
 
     if args.dry_run:
-        # Spot-check a few fetched values
-        sample = [u for u in updates if u[0] is not None][:3]
         print("Dry-run samples (temp, wind, precip, aod, station, date):")
-        for u in sample:
+        for u in updates[:3]:
             print(f"  {u}")
-        missing_temps = sum(1 for u in updates if u[0] is None)
-        print(f"Rows with NULL temperature: {missing_temps}")
         print("DRY RUN — no DB writes performed.")
         conn.close()
         return
 
-    # (Writes already happened per-date above; resume-safe.)
-
-    repair_rolling(conn, repair_cutoff)
-    conn.commit()
+    # ── Forced recompute of features derived from the columns just filled ──
+    print("\nRecomputing rolling_3day_precip / aod_volatility_index ...")
+    t1 = time.time()
+    updated = build_advanced_weather_features(conn, force=True, since=args.start)
+    print(f"  {updated:,} rows recomputed ({time.time() - t1:.0f}s)")
 
     # ── Verification ──
     with conn.cursor() as cur:
@@ -309,7 +305,7 @@ def main():
         """, (args.start, args.end))
         print("\nPost-backfill NULLs per date:")
         for dt, nt, na in cur.fetchall():
-            print(f"  {dt.date()}: {nt:,} null temp / {na:,} null AOD")
+            print(f"  {dt}: {nt:,} null temp / {na:,} null AOD")
 
     conn.close()
     print(f"\nDone in {time.time() - t0:.0f}s.")

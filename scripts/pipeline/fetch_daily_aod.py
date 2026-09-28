@@ -84,3 +84,55 @@ def fetch_aod_batch_for_date(fallback_manager: ApiFallbackManager, lats_str: str
         mean_aod = sum(valid_aod) / len(valid_aod) if valid_aod else 0.0
         out.append({"om_aerosol_optical_depth": mean_aod})
     return out
+
+
+def fetch_aod_batch_range(fallback_manager: ApiFallbackManager, lats_str: str, lons_str: str,
+                          start_date: str, end_date: str):
+    """
+    Fetches daily-mean AOD for MANY coordinates over a multi-day RANGE in one call.
+
+    AOD is hourly, so responses grow with the span: the caller is expected to pass
+    short windows (~14 days) to keep each response around 1 MB.
+    Daily means use the same convention as fetch_aod_batch_for_date — mean of the
+    non-NULL hours, 0.0 for a day with no valid hour.
+    Returns a list (request order) of {date_iso: mean_aod} dicts.
+    """
+    n_locations = len(lats_str.split(","))
+    params = {
+        "latitude": lats_str,
+        "longitude": lons_str,
+        "start_date": start_date,
+        "end_date": end_date,
+        "hourly": ["aerosol_optical_depth"],
+        "timezone": "auto"
+    }
+
+    data = fallback_manager.request_with_fallback(
+        url=OPEN_METEO_AQ_URL,
+        params=params,
+        is_openaq=False
+    )
+
+    if not isinstance(data, list) or len(data) != n_locations:
+        raise ValueError(f"Open-Meteo AOD range batch returned {type(data).__name__} with "
+                         f"{len(data) if isinstance(data, list) else 'n/a'} entries for "
+                         f"{n_locations} locations ({start_date}..{end_date})")
+
+    out = []
+    for entry in data:
+        hourly = entry.get("hourly", {})
+        times = hourly.get("time", [])
+        if not times:
+            raise ValueError(f"Open-Meteo AOD range batch returned empty hourly array for "
+                             f"{entry.get('latitude')},{entry.get('longitude')} ({start_date}..{end_date})")
+        aods = hourly.get("aerosol_optical_depth", [])
+        buckets = {}
+        for i, t in enumerate(times):
+            day = t[:10]
+            val = aods[i] if i < len(aods) else None
+            buckets.setdefault(day, [])
+            if val is not None:
+                buckets[day].append(val)
+        out.append({day: (sum(vals) / len(vals) if vals else 0.0)
+                    for day, vals in buckets.items()})
+    return out

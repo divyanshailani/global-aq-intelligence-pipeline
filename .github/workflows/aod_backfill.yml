@@ -1,0 +1,69 @@
+name: Global AQI AOD Backfill
+
+# Closes AOD holes in daily_features. Aerosol optical depth comes from the
+# Open-Meteo air-quality host, which throttles the residential IP used for local
+# repairs (every attempt re-arms its per-minute limiter), while GitHub runners
+# get a clean budget — the daily pipeline's AOD calls have succeeded from here
+# for months. Weather columns are left untouched: run the script locally with
+# --skip-aod for those.
+#
+# Run manually with the date range that needs filling (the script is
+# resumable and only fetches rows still missing AOD).
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: 'First date to fill (YYYY-MM-DD)'
+        required: true
+        default: '2026-08-09'
+      end:
+        description: 'Last date to fill (YYYY-MM-DD)'
+        required: true
+        default: '2026-09-24'
+
+# Share the database lock with the daily job; backfill must never mutate the
+# same production tables while the public pipeline is running.
+concurrency:
+  group: global-aqi-production-database
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+  POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+  POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+  POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+  OPENAQ_KEYS: ${{ secrets.OPENAQ_KEYS }}
+  PYTHONUNBUFFERED: '1'
+
+jobs:
+  aod-backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout pipeline
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -Eeuo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Backfill AOD
+        run: |
+          set -Eeuo pipefail
+          python -u scripts/operations/backfill_weather_batch.py \
+            --start "${{ inputs.start }}" \
+            --end "${{ inputs.end }}" \
+            --skip-weather

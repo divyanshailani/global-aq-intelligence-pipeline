@@ -530,20 +530,34 @@ def ensure_advanced_weather_columns(conn):
     conn.commit()
 
 
-def build_advanced_weather_features(conn):
+def build_advanced_weather_features(conn, force: bool = False, since=None):
     """
     Computes advanced weather features like 3-day rolling precipitation
     and AOD volatility across all rows using efficient Postgres window functions.
     This prevents data leakage by explicitly skipping the current day.
+
+    force=True recomputes rows that already hold a value — needed after a
+    weather/AOD backfill, because those rows were derived from NULL inputs
+    (or from values corrected later) and the default guard skips them.
+
+    since='YYYY-MM-DD' limits the recompute to rows from that date onward; the
+    window still reads 8 days further back so the first rows are correct. Rows
+    before `since` cannot be affected by later data, so bounding a repair of one
+    date range keeps it off a 1.6M row table.
     """
     ensure_advanced_weather_columns(conn)
 
-    # We update all rows that don't have rolling_3day_precip computed yet.
+    # By default we update only rows that don't have rolling features yet.
     # To compute rolling features safely without data leakage:
     # rolling_3day_precip: SUM of past 3 days (excluding today).
     # aod_volatility: STDDEV of past 7 days (excluding today).
 
-    sql = """
+    guard = "" if force else """
+          AND (df.rolling_3day_precip IS NULL OR df.aod_volatility_index IS NULL)"""
+    cte_bound = "WHERE date >= %s::date - INTERVAL '8 days'" if since else ""
+    row_bound = "\n          AND df.date >= %s::date" if since else ""
+
+    sql = f"""
         WITH rolling_data AS (
             SELECT station_id, date, parameter,
                    SUM(om_precipitation) OVER (
@@ -557,6 +571,7 @@ def build_advanced_weather_features(conn):
                        ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING
                    ) as aod_vol
             FROM daily_features
+            {cte_bound}
         )
         UPDATE daily_features df
         SET rolling_3day_precip = COALESCE(rd.roll_3_precip, 0),
@@ -564,11 +579,14 @@ def build_advanced_weather_features(conn):
         FROM rolling_data rd
         WHERE df.station_id = rd.station_id
           AND df.date = rd.date
-          AND df.parameter = rd.parameter
-          AND (df.rolling_3day_precip IS NULL OR df.aod_volatility_index IS NULL)
+          AND df.parameter = rd.parameter{row_bound}{guard}
     """
+    params = (since, since) if since else None
     with conn.cursor() as cur:
-        cur.execute(sql)
+        if params:
+            cur.execute(sql, params)
+        else:
+            cur.execute(sql)
         updated = cur.rowcount
     conn.commit()
     return updated
