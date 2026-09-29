@@ -14,7 +14,7 @@ import time
 import pandas as pd
 import psycopg2
 
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data")
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "daily_features_full.parquet")
 
 def require_env(name: str) -> str:
