@@ -21,9 +21,15 @@ Checks, all scoped to a recent window so they stay cheap:
   1. country_code NULLs          - the 20k-orphan signature (hard fail)
   2. observation freshness       - did daily_features actually advance?
   3. om_* weather NULL rate      - the starvation signature
-  4. AOD NULL rate               - physics keeps this high (~1/3 overall,
-                                   ~2/3 in India); it fails only when the
-                                   air-quality host stopped answering
+  4. AOD NULL rate               - historical starvation signature: this sat at
+                                   ~33% overall and 63.5% in India until the
+                                   2026-09-28 batch-enrichment + backfill, which
+                                   took it to 0.0% (measured 2026-09-29). The old
+                                   "clouds block the satellite" explanation was
+                                   WRONG - the same geography now reports 0% NULL,
+                                   so those NULLs were failed/rate-limited AOD
+                                   fetches, not physics. Fails only if the feed
+                                   stops answering again.
   5. derived rolling features    - NULL when their inputs are present
   6. prediction_log recency      - did inference record a run?
 

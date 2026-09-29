@@ -100,7 +100,7 @@ failures loop). Read the linked run before redispatching.
 |---|---|---|
 | `MAX_OBS_LAG_DAYS` | 6 | normal lag is 3-4d (OpenAQ publishes behind) |
 | weather NULL % | fail 20 / warn 10 | measured 9.9% from backfill stragglers |
-| AOD NULL % | fail 75 / warn 55 | physics: ~33% overall, India monsoon 63.5% |
+| AOD NULL % | fail 75 / warn 55 | historical ~33% overall / 63.5% India; now 0.0% after the 2026-09-28 backfill (the old "cloud physics" explanation was a misdiagnosis — batch fetches fixed it) |
 | `WATCHDOG_GRACE_HOURS` | 8 | worst observed scheduler queue delay |
 
 Set them in `.env` (the scripts source `src/config.py` → dotenv). A gate that
