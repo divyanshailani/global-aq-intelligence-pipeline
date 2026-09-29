@@ -196,6 +196,60 @@ jobs:
           git config user.email 'bot@globalaqi.com'
           git remote set-url origin "https://x-access-token:${FRONTEND_PAT}@github.com/divyanshailani/global-aq-intelligence-web.git"
 
+      - name: Measure database storage for the site
+        # Requested by the maintaining agent so DB headroom is visible from the
+        # published site. Deliberately NON-blocking, unlike the contract and
+        # freshness gates above: this measures storage, which says nothing about
+        # whether today's data is good - that is already enforced upstream. A
+        # transient connection blip here must not cost the site its daily update
+        # (same reasoning as the advisory "Final database health check").
+        # Writes site_data/db_status.json, which the publish step's
+        # site_data/*.json glob then carries to public/data/ automatically.
+        continue-on-error: true
+        run: |
+          set -Eeuo pipefail
+          python - <<'PYCODE'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          import psycopg2
+
+          conn = psycopg2.connect(
+              host=os.environ["POSTGRES_HOST"].strip(),
+              # .get with a default, matching src/config.py: POSTGRES_PORT is a
+              # CI secret but absent from a local .env, and this step should not
+              # hard-fail where every other script works.
+              port=int(os.environ.get("POSTGRES_PORT", "5432").strip()),
+              user=os.environ["POSTGRES_USER"].strip(),
+              password=os.environ["POSTGRES_PASSWORD"].strip(),
+              dbname=os.environ["POSTGRES_DB"].strip(),
+              connect_timeout=15,
+              sslmode="require",
+          )
+          try:
+              with conn.cursor() as cur:
+                  # env var, not a literal: a db rename must not silently
+                  # measure the wrong database (or none).
+                  cur.execute("SELECT pg_database_size(%s)", (os.environ["POSTGRES_DB"].strip(),))
+                  size_bytes = cur.fetchone()[0]
+          finally:
+              conn.close()
+
+          cap_bytes = 32 * 1024 ** 3
+          payload = {
+              "size_bytes": size_bytes,
+              "cap_bytes": cap_bytes,
+              "pct_used": round(100 * size_bytes / cap_bytes, 2),
+              "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+          }
+          output = Path("site_data/db_status.json")
+          output.parent.mkdir(parents=True, exist_ok=True)
+          output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          print(f"Database storage: {payload['pct_used']:.2f}% of 32 GiB")
+          PYCODE
+
       - name: Publish generated site data
         env:
           FRONTEND_DIR: ${{ runner.temp }}/global-aq-intelligence-web
