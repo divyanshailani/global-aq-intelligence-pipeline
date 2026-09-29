@@ -20,16 +20,17 @@ caught at the moment it happens rather than weeks later during an audit.
 Checks, all scoped to a recent window so they stay cheap:
   1. country_code NULLs          - the 20k-orphan signature (hard fail)
   2. observation freshness       - did daily_features actually advance?
-  3. om_* weather NULL rate      - the starvation signature
-  4. AOD NULL rate               - historical starvation signature: this sat at
-                                   ~33% overall and 63.5% in India until the
-                                   2026-09-28 batch-enrichment + backfill, which
-                                   took it to 0.0% (measured 2026-09-29). The old
-                                   "clouds block the satellite" explanation was
-                                   WRONG - the same geography now reports 0% NULL,
-                                   so those NULLs were failed/rate-limited AOD
-                                   fetches, not physics. Fails only if the feed
-                                   stops answering again.
+  3. om_* weather missing rate   - the starvation signature (NaN-inclusive)
+  4. AOD missing rate            - starvation signature (NaN-inclusive): it sits
+                                   at ~31% overall and ~30% in India over the
+                                   full table (measured 2026-09-29: 544,356 of
+                                   1,759,755 rows). These values are stored as
+                                   float8 NaN, not NULL, so an earlier `IS NULL`
+                                   reading of "0.0%" was a measurement artifact -
+                                   and the "clouds block the satellite" vs "feed
+                                   starvation" question was never actually settled
+                                   by measurement. Fails only if the rate climbs
+                                   past the budget.
   5. derived rolling features    - NULL when their inputs are present
   6. prediction_log recency      - did inference record a run?
 
@@ -66,6 +67,23 @@ MAX_NULL_WEATHER_RATE = float(os.environ.get("MAX_NULL_WEATHER_RATE", "20"))
 WARN_NULL_WEATHER_RATE = float(os.environ.get("WARN_NULL_WEATHER_RATE", "10"))
 MAX_NULL_AOD_RATE = float(os.environ.get("MAX_NULL_AOD_RATE", "75"))
 WARN_NULL_AOD_RATE = float(os.environ.get("WARN_NULL_AOD_RATE", "55"))
+
+
+def missing(col: str) -> str:
+    """SQL predicate for 'this feature has no value', NaN-inclusive.
+
+    The enrichment writes missing weather/AOD as PostgreSQL float8 'NaN' - a
+    stored VALUE, so `IS NULL` matched only 2 of the 544,356 missing AOD rows
+    while reading a false 0.0%.
+
+    Do NOT 'simplify' this to the usual IEEE NaN idiom `col <> col`: PostgreSQL
+    deliberately makes NaN = NaN TRUE (so NaNs sort and can be indexed), so that
+    test matches ZERO rows. Measured on the production table: `<>` self-comparison
+    found 0 of the 544,354 stored NaN rows, `= 'NaN'::float8` found all of them.
+    """
+    return f"({col} IS NULL OR {col} = 'NaN'::float8)"
+
+
 # Observations legitimately trail the calendar by 3-4 days (OpenAQ publishes
 # behind), so failing at 3 would reject a perfectly healthy run.
 MAX_OBS_LAG_DAYS = int(os.environ.get("MAX_OBS_LAG_DAYS", "6"))
@@ -148,52 +166,52 @@ def main() -> int:
                 f"collection is slowing but not stalled."
             )
 
-    # ---- 3/4/5. feature NULL rates in the window ---------------------------
+    # ---- 3/4/5. feature missing rates in the window ------------------------
     n, n_temp, n_precip, n_aod, n_roll, n_aodvol = one(
-        """SELECT count(*),
-                  count(*) FILTER (WHERE om_temperature IS NULL),
-                  count(*) FILTER (WHERE om_precipitation IS NULL),
-                  count(*) FILTER (WHERE om_aerosol_optical_depth IS NULL),
-                  count(*) FILTER (WHERE rolling_3day_precip IS NULL),
-                  count(*) FILTER (WHERE aod_volatility_index IS NULL)
+        f"""SELECT count(*),
+                  count(*) FILTER (WHERE {missing('om_temperature')}),
+                  count(*) FILTER (WHERE {missing('om_precipitation')}),
+                  count(*) FILTER (WHERE {missing('om_aerosol_optical_depth')}),
+                  count(*) FILTER (WHERE {missing('rolling_3day_precip')}),
+                  count(*) FILTER (WHERE {missing('aod_volatility_index')})
            FROM daily_features WHERE date >= %s""",
         (window_start,),
     )
     if n:
-        print(f"  NULL om_temperature     {n_temp:,} ({pct(n_temp, n):.1f}%)")
-        print(f"  NULL om_precipitation   {n_precip:,} ({pct(n_precip, n):.1f}%)")
-        print(f"  NULL om_aod             {n_aod:,} ({pct(n_aod, n):.1f}%)")
-        print(f"  NULL rolling_3day_precip {n_roll:,} ({pct(n_roll, n):.1f}%)")
-        print(f"  NULL aod_volatility     {n_aodvol:,} ({pct(n_aodvol, n):.1f}%)")
+        print(f"  missing om_temperature   {n_temp:,} ({pct(n_temp, n):.1f}%)")
+        print(f"  missing om_precipitation {n_precip:,} ({pct(n_precip, n):.1f}%)")
+        print(f"  missing om_aod           {n_aod:,} ({pct(n_aod, n):.1f}%)")
+        print(f"  missing rolling_3day_precip {n_roll:,} ({pct(n_roll, n):.1f}%)")
+        print(f"  missing aod_volatility   {n_aodvol:,} ({pct(n_aodvol, n):.1f}%)")
 
         temp_rate = pct(n_temp, n)
         if temp_rate > MAX_NULL_WEATHER_RATE:
             rep.fail(
-                f"om_temperature is {temp_rate:.1f}% NULL in the window "
+                f"om_temperature is missing on {temp_rate:.1f}% of window rows "
                 f"(budget {MAX_NULL_WEATHER_RATE:.0f}%). This is how the "
                 f"2026-07-25..09-28 starvation looked: Open-Meteo calls refused, "
-                f"rows kept, features left NULL, and the NULLs then trained on."
+                f"rows kept, features left empty, and that emptiness trained on."
             )
         elif temp_rate > WARN_NULL_WEATHER_RATE:
-            rep.warn(f"om_temperature NULL rate climbing: {temp_rate:.1f}%")
+            rep.warn(f"om_temperature missing rate climbing: {temp_rate:.1f}%")
 
         aod_rate = pct(n_aod, n)
         if aod_rate > MAX_NULL_AOD_RATE:
             rep.fail(
-                f"om_aerosol_optical_depth is {aod_rate:.1f}% NULL in the window "
-                f"(budget {MAX_NULL_AOD_RATE:.0f}%). Cloud cover legitimately drives "
-                f"this to ~1/3 overall and ~2/3 in India; above the budget the "
-                f"air-quality host is refusing again (per-IP daily unit budget)."
+                f"om_aerosol_optical_depth is missing on {aod_rate:.1f}% of window "
+                f"rows (budget {MAX_NULL_AOD_RATE:.0f}%). Over the whole table it "
+                f"measures ~31% overall and ~30% in India (2026-09-29), so a rate "
+                f"far above that means enrichment is answering even less than usual."
             )
         elif aod_rate > WARN_NULL_AOD_RATE:
-            rep.warn(f"om_aerosol_optical_depth NULL rate climbing: {aod_rate:.1f}%")
+            rep.warn(f"om_aerosol_optical_depth missing rate climbing: {aod_rate:.1f}%")
 
-        # Derived features must not be NULL where their inputs exist: that means
+        # Derived features must not be missing where their inputs exist: that means
         # the recompute step was skipped rather than the upstream being missing.
         stuck = one(
-            """SELECT count(*) FROM daily_features
-               WHERE date >= %s AND om_temperature IS NOT NULL
-                 AND rolling_3day_precip IS NULL""",
+            f"""SELECT count(*) FROM daily_features
+               WHERE date >= %s AND NOT {missing('om_temperature')}
+                 AND {missing('rolling_3day_precip')}""",
             (window_start,),
         )[0]
         print(f"  rolling_3day_precip NULL despite weather present {stuck:,}")

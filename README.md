@@ -85,7 +85,7 @@ We migrated to the V12 Challenger Pure Engine, marking the first honestly-evalua
 **Key Takeaways:**
 - **16/16 Models Beat Persistence**: All 16 V12 models achieved MASE < 1.0.
 - **GB Dominance**: Great Britain demonstrated exceptional stability with MASE 0.17 at h=14 and h=30 (83% better than persistence) and high Accuracy (~88%).
-- **IN Resilience**: India achieved MASE 0.5185 at h=30. (Note: the "63.5% AOD null rate (monsoon blinding)" quoted here historically was an enrichment-feed starvation artefact, not physics — after the 2026-09-28 batch-call fix plus AOD backfill, the measured AOD NULL rate is **0.0%** across all four countries.)
+- **IN Resilience**: India achieved MASE 0.5185 at h=30. (Note: the "63.5% AOD null rate (monsoon blinding)" quoted here historically was neither feed starvation nor a fixed problem — AOD is still missing for **30.93%** of the 1,759,755 Azure `daily_features` rows and **29.8%** of India's (39,907 of 133,762). Missing AOD is stored as PostgreSQL float8 `NaN`, which is a value and not a NULL, so SQL `IS NULL` read a false **0.0%**; the historical "~33% overall" figure was roughly right, the India-specific 63.5% was not, and the cause of the missingness is not determined by these measurements.)
 - **Error Decay Reality**: The error decay chart shows GB stable at ~1 µg/m³ MAE across all horizons, AU stable around ~4, US monotonically increasing from 6.1 to 9.6, and IN decreasing from 34.6 to 27.1 due to the monsoon transition easing volatility.
 
 ### Live Validation Metrics (updated daily)
@@ -271,7 +271,7 @@ The following issues were identified during a full Azure DB audit (2026-06-27) a
 
 - **Quantile Regression / Regime-Switching**: Addressing the US mean reversion trap where MAE-optimized decision trees collapse extreme tail events (60 µg/m³) into averages (~12 µg/m³).
 - **Data Accumulation**: Maturing the US holdout dataset to establish statistical significance for h=14d and h=30d horizons.
-- **~~Non-AOD Proxies~~** (RESOLVED 2026-09-29): the premise was a misdiagnosis — India's AOD was never blocked by monsoon clouds, it was a starved/rate-limited enrichment feed. AOD NULL is now 0.0% for all countries. Keep this only as a regression watch: if India's AOD NULL rate climbs again, treat it as a feed failure, not weather.
+- **~~Non-AOD Proxies~~** (RESOLVED 2026-09-29): the premise was a misdiagnosis, but so was the "resolved" reading — India's AOD is still missing NaN-inclusively at **29.8%** (**30.93%** globally), stored as float8 `NaN` rather than NULL, which `IS NULL` cannot see. Keep this as a regression watch, and measure NaN-inclusively before attributing any AOD change to a feed failure or to weather.
 - **Automated Re-training**: Establishing a CI/CD cadence for Parquet re-export and Modal grid re-training to prevent model drift.
 
 ### ⚡ Global Grid Engine Specifications

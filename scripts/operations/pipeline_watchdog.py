@@ -15,7 +15,7 @@ Checks, deliberately external and cheap:
   2. observations    - max(daily_features.date) vs today (lags 3-4d are normal;
                        the Open-Meteo starvation of 2026-07-25..09-28 was found
                        only by inspection two months later).
-  3. weather feed    - om_temperature NULL rate over 10 days (starvation
+  3. weather feed    - om_temperature missing rate over 10 days (NaN-inclusive; starvation
                        signature; genuine starvation is ~100%).
   4. storage         - GiB used vs the 32 GiB provisioned cap (auto-grow is
                        off, so crossing it turns every write into an error).
@@ -188,18 +188,24 @@ def check_database(rep: Report) -> None:
                         f"({lag}d behind the server clock)")
 
     since = server_now.date() - timedelta(days=10)
+    # Missing weather is written as float8 'NaN' (a stored value, so `IS NULL`
+    # reads ~0% no matter how starved the feed is). PostgreSQL treats NaN = NaN
+    # as TRUE, so the usual `col <> col` idiom matches nothing here; compare to
+    # the NaN literal instead. Same predicate as assert_data_contract.missing().
     cur.execute(
-        """SELECT count(*), count(*) FILTER (WHERE om_temperature IS NULL)
+        """SELECT count(*),
+                  count(*) FILTER (WHERE om_temperature IS NULL
+                                     OR om_temperature = 'NaN'::float8)
            FROM daily_features WHERE date >= %s""",
         (since,),
     )
     n, n_null = cur.fetchone()
     if n:
         rate = 100.0 * n_null / n
-        print(f"  om_temperature NULL over 10d: {rate:.1f}% ({n_null:,}/{n:,})")
+        print(f"  om_temperature missing over 10d: {rate:.1f}% ({n_null:,}/{n:,})")
         if rate > MAX_WEATHER_NULL_PCT:
             rep.problem(
-                f"om_temperature is {rate:.1f}% NULL over the last 10 days: the "
+                f"om_temperature is missing on {rate:.1f}% of the last 10 days: the "
                 f"Open-Meteo feed is starving (2026-07-25..09-28 signature)."
             )
 

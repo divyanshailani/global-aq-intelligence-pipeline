@@ -100,7 +100,7 @@ failures loop). Read the linked run before redispatching.
 |---|---|---|
 | `MAX_OBS_LAG_DAYS` | 6 | normal lag is 3-4d (OpenAQ publishes behind) |
 | weather NULL % | fail 20 / warn 10 | measured 9.9% from backfill stragglers |
-| AOD NULL % | fail 75 / warn 55 | historical ~33% overall / 63.5% India; now 0.0% after the 2026-09-28 backfill (the old "cloud physics" explanation was a misdiagnosis — batch fetches fixed it) |
+| AOD NULL % | fail 75 / warn 55 | AOD is missing for **30.93%** of `daily_features` rows (1,759,755) overall and **29.8%** of India's; missing values are stored as float8 `NaN` (a value, not a NULL), so the guards count `(col IS NULL OR col = 'NaN'::float8)` - NOT the usual `col <> col`, which matches nothing because PostgreSQL makes NaN = NaN true - and this budget is NaN-inclusive. The historical ~33% overall figure was roughly right, the 63.5% India figure was not; what causes the missingness is not established. |
 | `WATCHDOG_GRACE_HOURS` | 8 | worst observed scheduler queue delay |
 
 Set them in `.env` (the scripts source `src/config.py` → dotenv). A gate that
