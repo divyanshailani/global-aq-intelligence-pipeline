@@ -31,7 +31,7 @@ jobs:
     # ceiling must stay above the sum of step ceilings or it reproduces the
     # 2026-09-28 failure one level up: a slow-but-healthy pass killed by a
     # budget that assumed an average run.
-    timeout-minutes: 95
+    timeout-minutes: 115
 
     steps:
       - name: Checkout pipeline
@@ -130,26 +130,28 @@ jobs:
         # 20-minute ceiling killed the run mid-pass (12:16:01->12:36:14,
         # exactly 20m) with zero of the 3 retry attempts ever running, while
         # the identical step six hours earlier took 14m40s. The ceiling now
-        # lives on each ATTEMPT (15m: steady state + jitter; a true hang dies
-        # there) and the step fits two attempts plus backoff.
-        timeout-minutes: 34
+        # lives on each ATTEMPT (25m, allowing Phase 4 / variable DB work to
+        # finish under load); two full attempts plus one backoff fit the 55m
+        # step ceiling. Retries restart the ETL from Phase 1, so keep the count
+        # explicit and leave room for termination grace.
+        timeout-minutes: 55
         run: |
           set -Eeuo pipefail
           succeeded=0
-          for attempt in 1 2 3; do
-            echo "ETL attempt $attempt/3"
-            if timeout --signal=TERM --kill-after=60s 15m \
+          for attempt in 1 2; do
+            echo "ETL attempt $attempt/2"
+            if timeout --signal=TERM --kill-after=60s 25m \
               python -u scripts/pipeline/run_daily_etl.py --recent-days 5 --max-enrich 5000; then
               echo "ETL succeeded on attempt $attempt"
               succeeded=1
               break
             fi
             echo "ETL attempt $attempt failed"
-            if [[ "$attempt" -lt 3 ]]; then
+            if [[ "$attempt" -lt 2 ]]; then
               sleep 60
             fi
           done
-          [[ "$succeeded" -eq 1 ]] || { echo 'ERROR: ETL failed after 3 attempts'; exit 1; }
+          [[ "$succeeded" -eq 1 ]] || { echo 'ERROR: ETL failed after 2 attempts'; exit 1; }
 
       - name: Assert written data contract
         # Blocking, unlike the advisory final health check: every bug class
@@ -373,28 +375,10 @@ jobs:
       - name: Notify on failure
         if: ${{ failure() }}
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -Euo pipefail
           echo "::error::Global AQI Daily Pipeline failed (run $GITHUB_RUN_ID)"
-
-          # A GitHub issue is the primary channel because it needs no external
-          # setup. Slack is best-effort: the secret currently holds a placeholder,
-          # so a non-empty value is not proof of a working webhook.
-          case "${SLACK_WEBHOOK_URL:-}" in
-            https://hooks.slack.com/*)
-              curl -sS -m 20 -X POST -H 'Content-type: application/json' \
-                --data "{\"text\":\"🚨 Global AQI Daily Pipeline failed\\nRun: $GITHUB_RUN_ID\\nRepo: $GITHUB_REPOSITORY\\nBranch: $GITHUB_REF_NAME\\nTime: $(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" \
-                "$SLACK_WEBHOOK_URL" || echo 'Slack notification failed (non-fatal)'
-              ;;
-            '')
-              echo 'SLACK_WEBHOOK_URL unset — skipping Slack notification'
-              ;;
-            *)
-              echo 'SLACK_WEBHOOK_URL is not a Slack webhook URL — skipping Slack notification'
-              ;;
-          esac
 
           if ! gh label list --repo "$GITHUB_REPOSITORY" --search pipeline-failure --json name --jq '.[].name' | grep -qx 'pipeline-failure'; then
             gh label create pipeline-failure --repo "$GITHUB_REPOSITORY" \
