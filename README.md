@@ -94,13 +94,13 @@ The pipeline validates predictions against actual PM2.5 readings and publishes l
 
 | Country | Test MAE | Live MAE | Live Acc | Samples | Drift |
 |---------|----------|----------|----------|---------|-------|
-| GB | 1.5 | 2.46 | 56.1% | 44 | ⚠️ 1.64× (station mix shift) |
+| GB | 3.5 | 2.46 | 56.1% | 44 | ✅ (baseline re-measured 2026-10-05; table's live figures are from an earlier run) |
 | US | 2.5 | 2.02 | 81.9% | 54 | ✅ |
 | IN | 22.0 (Oct-Feb) / 3.0 (Mar-Sep) | 15.17 | 40.6% | 54 | ✅ (~0.69× winter baseline) |
 | AU | 2.0 | 2.11 | 61.7% | 55 | ✅ |
 | **Overall** | — | **5.57** | **54.5%** | **207** | — |
 
-> **Note:** GB drift is caused by a station count explosion (6 → 335 since training). The model generalizes well but the test baseline needs updating. The pipeline auto-opens a GitHub issue when drift is detected.
+> **Note:** The old GB baseline of 1.5 came from a ~6-station champion and did not match the country-aggregate live metric. The baseline is now 3.5 (see `docs/decisions/2026-10-05-gb-drift-baseline.md`); GB models are unchanged pending more history. The pipeline auto-opens a GitHub issue when drift is detected.
 
 ### Forecast Visualizations
 

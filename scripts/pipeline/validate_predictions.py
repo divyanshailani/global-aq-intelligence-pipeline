@@ -37,7 +37,7 @@ SITE_DATA_DIR = os.path.join(PROJECT_ROOT, "site_data")
 TEST_MAE_BASELINES = {
     "IN": 3.0,   # Jul-Sep 2026 backtest: 2.90
     "US": 2.5,
-    "GB": 1.5,
+    "GB": 3.5,   # champion, Jun-Sep 2026 aggregate backtest: 2.6-3.8 by origin month (mean ~3.3)
     "AU": 2.0,   # Jul-Sep 2026: 1.43, Oct-Dec 2025: 2.11
 }
 # Months with a different baseline (IN Oct-Feb smog season; Oct-Dec 2025 backtest: 23.2).
