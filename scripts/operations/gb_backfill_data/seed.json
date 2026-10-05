@@ -1,0 +1,28 @@
+{
+  "processed": 2000,
+  "inserted_rows": 192681,
+  "fetched_rows": 192681,
+  "per_year": {
+    "2025": 2000
+  },
+  "total": 123537,
+  "manifest_sha256": "a87745d1b8efb108541d1c5953b6d9b9e7c97332dfc2dcfa80e05ee452dfc8b8",
+  "fleet_scope": 208,
+  "task_station_count": 166,
+  "year_plan": {
+    "2025": 41011,
+    "2024": 22676,
+    "2023": 12290,
+    "2022": 8468,
+    "2021": 9198,
+    "2020": 6437,
+    "2019": 6373,
+    "2018": 6184,
+    "2017": 5849,
+    "2016": 4756,
+    "2015": 295
+  },
+  "bootstrap_note": "First 2000 task keys exactly match original processed.txt; next uncheckpointed chunk must replay with ON CONFLICT DO NOTHING.",
+  "legacy_recovered_rows": 46770,
+  "legacy_reconcile": "Read-only exact source-key check: tasks[2000:2500] have 46,770/46,770 unique archive keys already present. Cursor remains 2000; replay conflict-dedupes these rows. inserted_rows excludes this separately reconciled legacy commit."
+}
