@@ -31,13 +31,28 @@ from src.config import DB_CONFIG, COUNTRIES  # noqa: E402
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SITE_DATA_DIR = os.path.join(PROJECT_ROOT, "site_data")
 
-# Test MAE baselines from V12 training (COUNTRY_META in predict_v12_onnx.py)
+# Country-aggregate MAE baselines (forecast = mean across stations, interpolated
+# across h1/7/14/30 anchors; actual = realized country mean). Backtested 2026-10-05,
+# see PR body. Only IN is seasonal because its winter error is ~8x summer error.
 TEST_MAE_BASELINES = {
-    "IN": 27.1,
+    "IN": 3.0,   # Jul-Sep 2026 backtest: 2.90
     "US": 2.5,
     "GB": 1.5,
-    "AU": 3.0,
+    "AU": 2.0,   # Jul-Sep 2026: 1.43, Oct-Dec 2025: 2.11
 }
+# Months with a different baseline (IN Oct-Feb smog season; Oct-Dec 2025 backtest: 23.2).
+# Jan-Feb are extrapolated from Oct-Dec, not backtested.
+SEASONAL_BASELINES = {
+    "IN": ({10, 11, 12, 1, 2}, 22.0),
+}
+
+
+def baseline_for(cc, today=None):
+    months, val = SEASONAL_BASELINES.get(cc, (set(), None))
+    m = (today or date.today()).month
+    return val if val is not None and m in months else TEST_MAE_BASELINES.get(cc)
+
+
 DRIFT_THRESHOLD = 1.5  # alert if live MAE > 1.5x test MAE
 
 # Don't publish a live number off a handful of samples.
@@ -147,7 +162,7 @@ def summarize(rows):
         c_mean = float(np.mean(a))
         
         # Drift detection: live MAE > 1.5x test MAE baseline
-        test_mae = TEST_MAE_BASELINES.get(cc)
+        test_mae = baseline_for(cc)
         drift = None
         if test_mae and test_mae > 0:
             ratio = c_mae / test_mae
