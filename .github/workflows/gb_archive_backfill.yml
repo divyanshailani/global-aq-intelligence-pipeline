@@ -1,0 +1,62 @@
+name: GB Archive Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      initialize:
+        description: 'Initialize the frozen import at the reconciled 2000-file checkpoint'
+        type: boolean
+        default: false
+  workflow_run:
+    workflows: ['Global AQI Daily Pipeline']
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+  POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+  POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+  POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  PYTHONUNBUFFERED: '1'
+
+jobs:
+  backfill:
+    # Only manual/continuation dispatch or daily completion can start a slice.
+    # Job-level lock keeps skipped completion-event jobs out of the pending slot.
+    concurrency:
+      group: global-aqi-production-database
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install minimal dependencies
+        run: python -m pip install 'psycopg2-binary>=2.9,<3' 'requests>=2.31,<3'
+      - name: Import bounded slice
+        id: slice
+        timeout-minutes: 16
+        env:
+          INITIALIZE: ${{ github.event_name == 'workflow_dispatch' && inputs.initialize && 'true' || 'false' }}
+        run: python scripts/operations/backfill_gb_archive.py
+      - name: Continue only when daily pipeline has no pending run
+        if: steps.slice.outputs.status == 'continue'
+        run: |
+          set -Eeuo pipefail
+          for status in queued in_progress waiting pending; do
+            count=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/daily_pipeline.yml/runs?status=$status&per_page=1" --jq '.total_count')
+            if [[ "$count" != 0 ]]; then
+              echo 'Daily pipeline goes first; its completion resumes the unfinished DB checkpoint.'
+              exit 0
+            fi
+          done
+          gh workflow run gb_archive_backfill.yml --repo "$GITHUB_REPOSITORY" --ref main -f initialize=false
