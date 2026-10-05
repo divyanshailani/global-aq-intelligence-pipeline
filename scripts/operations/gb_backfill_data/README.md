@@ -35,10 +35,9 @@ slice, not hours. At the next chunk boundary the worker exits for daily priority
 A normal time-limited slice explicitly self-dispatches with initialize=false.
 The workflow token has actions:write; workflow_dispatch events can be triggered
 by GITHUB_TOKEN. If daily is queued, it does not dispatch a continuation; the
-daily completion event resumes only an existing unfinished checkpoint. Successful
-backfill completion events are filtered out before taking the concurrency lock,
-so skipped event jobs do not replace the queued continuation. A timed-out
-backfill completion also permits a checkpoint-based recovery.
+daily completion event resumes only an existing unfinished checkpoint. This workflow does not subscribe to its own completion events (GitHub rejects
+that design). A timed-out slice resumes on the next daily completion or manual
+dispatch, not immediately.
 
 GitHub concurrency has one pending slot and does not guarantee ordering. A
 just-arriving daily dispatch can race the final API check. The shared lock still
@@ -55,9 +54,8 @@ ON CONFLICT preserves existing measurements. Each flush checks the live daily
 workflow, database size (<28 GiB), and other active writers. NULL/NaN repair
 keeps its own guards; this workflow does not enrich weather or change models.
 
-A timeout has a workflow-completion fallback. Arbitrary cancellation, a runner
-failure classified other than timed_out, failed continuation dispatch, or an
-ordinary script/DB/source error can require manual dispatch (initialize=false)
+A timeout, cancellation, runner failure, failed continuation dispatch, or an
+ordinary script/DB/source error waits for manual dispatch (initialize=false)
 or the next daily completion. No system can promise that a GitHub runner never
 gets killed; this design makes a kill resumable and avoids the six-hour cliff.
 A failed job is visible as failed, never complete. Fetch failures do not advance

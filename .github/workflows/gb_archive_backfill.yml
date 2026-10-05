@@ -8,7 +8,7 @@ on:
         type: boolean
         default: false
   workflow_run:
-    workflows: ['Global AQI Daily Pipeline', 'GB Archive Backfill']
+    workflows: ['Global AQI Daily Pipeline']
     types: [completed]
 
 permissions:
@@ -26,12 +26,7 @@ env:
 
 jobs:
   backfill:
-    # Successful self-completions do NOT trigger another completion-event run.
-    # Only a daily completion or an unexpected six-hour/step timeout can recover.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.name == 'Global AQI Daily Pipeline' ||
-      github.event.workflow_run.conclusion == 'timed_out'
+    # Only manual/continuation dispatch or daily completion can start a slice.
     # Job-level lock keeps skipped completion-event jobs out of the pending slot.
     concurrency:
       group: global-aqi-production-database
