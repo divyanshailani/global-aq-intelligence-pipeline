@@ -90,14 +90,14 @@ We migrated to the V12 Challenger Pure Engine, marking the first honestly-evalua
 
 ### Live Validation Metrics (updated daily)
 
-The pipeline validates predictions against actual PM2.5 readings and publishes live metrics to `accuracy.json`. Drift detection flags any country where live MAE exceeds 1.5× the test MAE baseline.
+The pipeline validates predictions against actual PM2.5 readings and publishes live metrics to `accuracy.json`. Drift detection flags any country where live MAE exceeds 1.5× the test MAE baseline. Baselines are country-aggregate MAE (mean forecast vs realized country mean), not per-station MAE; IN uses a seasonal baseline (see `validate_predictions.py`).
 
 | Country | Test MAE | Live MAE | Live Acc | Samples | Drift |
 |---------|----------|----------|----------|---------|-------|
 | GB | 1.5 | 2.46 | 56.1% | 44 | ⚠️ 1.64× (station mix shift) |
 | US | 2.5 | 2.02 | 81.9% | 54 | ✅ |
-| IN | 27.1 | 15.17 | 40.6% | 54 | ✅ (0.56× baseline) |
-| AU | 3.0 | 2.11 | 61.7% | 55 | ✅ |
+| IN | 22.0 (Oct-Feb) / 3.0 (Mar-Sep) | 15.17 | 40.6% | 54 | ✅ (~0.69× winter baseline) |
+| AU | 2.0 | 2.11 | 61.7% | 55 | ✅ |
 | **Overall** | — | **5.57** | **54.5%** | **207** | — |
 
 > **Note:** GB drift is caused by a station count explosion (6 → 335 since training). The model generalizes well but the test baseline needs updating. The pipeline auto-opens a GitHub issue when drift is detected.
