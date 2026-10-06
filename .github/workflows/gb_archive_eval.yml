@@ -1,0 +1,41 @@
+name: GB Archive Research Eval
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+# No production writes or deployment. Avoid overlapping two large exports.
+concurrency:
+  group: gb-private-archive-evaluation
+  cancel-in-progress: false
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+      POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      GB_OUTPUT: ${{ github.workspace }}/research_output
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install research dependencies
+        run: python -m pip install 'pandas>=2,<3' 'numpy>=1.24,<3' 'psycopg2-binary>=2.9,<3' 'pyarrow>=14' 'xgboost>=2,<4' 'scikit-learn>=1.3'
+      - name: Read-only export and daily aggregation
+        timeout-minutes: 180
+        run: python research/gb/export.py
+      - name: Purged rolling-origin evaluation and candidate fits
+        timeout-minutes: 120
+        run: python research/gb/evaluate.py
+      - name: Save private research results (never models/v12)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gb-archive-research-${{ github.run_id }}
+          path: research_output/
+          retention-days: 14
