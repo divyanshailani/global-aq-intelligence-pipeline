@@ -16,6 +16,7 @@ def build():
  existing=pd.read_parquet(OUT/'existing.parquet');existing['date']=pd.to_datetime(existing.date)
  raw=pd.concat([pd.read_parquet(p) for p in sorted(OUT.glob('raw_daily_*.parquet'))],ignore_index=True)
  raw['date']=pd.to_datetime(raw.date)
+ raw=raw[(raw.date>='2015-01-01')&(raw.date<'2026-10-01')]
  units=raw.groupby('unit',dropna=False).n_raw.sum().to_dict()
  # Concentrations must be micrograms/m3, not silently mix ppb or mg/m3.
  valid_units={'µg/m³','μg/m³','ug/m3','µg/m3','ug/m³'}
@@ -60,7 +61,7 @@ def fit(q,h,cutoff):
  return m,len(tr),len(va)
 
 def main():
- d=build();existing=pd.read_parquet(OUT/'existing.parquet');existing['date']=pd.to_datetime(existing.date)
+ d=build();skipped_windows=[];existing=pd.read_parquet(OUT/'existing.parquet');existing['date']=pd.to_datetime(existing.date)
  archive_free=d.merge(existing[['station_id','date']],on=['station_id','date'],how='inner',validate='one_to_one')
  fleet=set(json.loads((OUT/'fleet.json').read_text()));results=[];models_by_window={a:{} for a,b in WINDOWS}
  for h in H:
@@ -68,11 +69,12 @@ def main():
   for a,b in WINDOWS:
    dest=OUT/f'eval_h{h}_{a}.json'
    a2=pd.Timestamp(a);te=q[(q.date>=a2)&(q.date<=pd.Timestamp(b))&q.station_id.isin(fleet)]
-   if len(te)<100:continue
+   if len(te)<100:
+    skipped_windows.append({'h':h,'window':[a,b],'test_rows':len(te),'test_stations':int(te.station_id.nunique()),'reason':'fewer than 100 current-fleet exact-calendar pairs'});continue
    m,nt,nv=fit(q,h,a2);models_by_window[a][h]=m
    actual=te.target.to_numpy();pred=m.predict(te[F]);old=champ.predict(te[F]);pers=te.value.to_numpy();roll=te.roll_7_mean.to_numpy()
    mae=lambda x:float(np.nanmean(np.abs(actual-x)))
-   r={'h':h,'window':[a,b],'train_rows':nt,'validation_rows':nv,'test_rows':len(te),'test_stations':int(te.station_id.nunique()),'best_iteration':int(m.best_iteration),'new_mae':mae(pred),'champ_mae':mae(old),'persistence_mae':mae(pers),'roll7_mae':mae(roll),'roll7_n':int(np.isfinite(roll).sum()),'mase':mae(pred)/mae(pers),'mean_actual':float(actual.mean()),'champ_fair':a>='2026-06-01'}
+   r={'h':h,'window':[a,b],'train_rows':nt,'validation_rows':nv,'test_rows':len(te),'test_stations':int(te.station_id.nunique()),'best_iteration':int(m.best_iteration),'new_mae':mae(pred),'champ_mae':mae(old),'persistence_mae':mae(pers),'roll7_mae':mae(roll),'roll7_n':int(np.isfinite(roll).sum()),'mase':mae(pred)/mae(pers),'mean_actual':float(actual.mean()),'champ_fair':a>='2026-06-01','common_roll7_subset':{'n':int(np.isfinite(roll).sum()),'new_mae':float(np.mean(np.abs(actual[np.isfinite(roll)]-pred[np.isfinite(roll)]))),'persistence_mae':float(np.mean(np.abs(actual[np.isfinite(roll)]-pers[np.isfinite(roll)])))}}
    if a=='2026-08-01':
     ablation,_,_=fit(q_old,h,a2);r['without_archive_calendar_mae']=mae(ablation.predict(te[F]))
    dest.write_text(json.dumps(r,indent=1));results.append(r);print('EVAL',json.dumps(r),flush=True)
@@ -82,6 +84,7 @@ def main():
   params=dict(P);params.pop('early_stopping_rounds');params['n_estimators']=int(selected.best_iteration)+1
   final=xgb.XGBRegressor(**params).fit(q[F],q.target,verbose=False);final.save_model(OUT/f'candidate_h{h}.json')
   print('FINAL',h,ntr,nva,int(selected.best_iteration),flush=True)
+ (OUT/'skipped_windows.json').write_text(json.dumps(skipped_windows,indent=2))
  (OUT/'eval.json').write_text(json.dumps(results,indent=2))
  champions={}
  for h in H:
