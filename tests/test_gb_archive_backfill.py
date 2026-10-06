@@ -79,6 +79,24 @@ class Tests(unittest.TestCase):
         self.assertFalse(any('UPDATE backfill_state' in call.args[0] for call in cur.execute.call_args_list))
         c.close.assert_called_once()
 
+    @patch.object(gb, 'pipeline_busy', return_value=False)
+    @patch.object(gb, 'load_state', return_value={'processed': 2000, 'finished': False})
+    @patch.object(gb, 'fetch', return_value=([], 0, 'hash'))
+    @patch.object(gb, 'flush', side_effect=gb.WriterBusy('external writer'))
+    @patch.object(gb, 'output')
+    def test_external_writer_self_continues(self, output, flush, fetch, state, busy):
+        gb.main()
+        output.assert_called_once_with('continue')
+
+    @patch.object(gb, 'pipeline_busy', return_value=False)
+    @patch.object(gb, 'load_state', return_value={'processed': 2000, 'finished': False})
+    @patch.object(gb, 'fetch', return_value=([], 0, 'hash'))
+    @patch.object(gb, 'flush', side_effect=gb.Yield('daily queued'))
+    @patch.object(gb, 'output')
+    def test_daily_keeps_priority(self, output, flush, fetch, state, busy):
+        gb.main()
+        output.assert_called_once_with('daily_first')
+
 
 if __name__ == '__main__':
     unittest.main()

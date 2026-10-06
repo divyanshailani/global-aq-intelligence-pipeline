@@ -49,7 +49,8 @@ jobs:
           INITIALIZE: ${{ github.event_name == 'workflow_dispatch' && inputs.initialize && 'true' || 'false' }}
         run: python scripts/operations/backfill_gb_archive.py
       - name: Continue only when daily pipeline has no pending run
-        if: steps.slice.outputs.status == 'continue'
+        # Recheck daily_first too: a queued daily run can disappear before exit.
+        if: steps.slice.outputs.status == 'continue' || steps.slice.outputs.status == 'daily_first'
         run: |
           set -Eeuo pipefail
           for status in queued in_progress waiting pending; do

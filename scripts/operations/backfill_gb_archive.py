@@ -33,6 +33,10 @@ class Yield(Exception):
     pass
 
 
+class WriterBusy(Yield):
+    pass
+
+
 def connect():
     return psycopg2.connect(
         host=os.environ['POSTGRES_HOST'], port=os.environ.get('POSTGRES_PORT') or '5432',
@@ -140,7 +144,7 @@ def flush(seed, expected, chunk, results):
                     raise RuntimeError('28 GiB database size guard')
                 cur.execute("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND state='active' AND pid<>pg_backend_pid() AND query NOT ILIKE 'SELECT%'")
                 if cur.fetchone()[0]:
-                    raise Yield('another writer is active')
+                    raise WriterBusy('another writer is active')
                 cur.execute('SELECT state FROM backfill_state WHERE task_id=%s FOR UPDATE', (TASK_ID,))
                 state = cur.fetchone()[0]
                 if state['processed'] != expected:
@@ -204,6 +208,10 @@ def main():
             pool.shutdown(wait=True)
             state = flush(seed, state['processed'], chunk, results)
             print(json.dumps(state), flush=True)
+        except WriterBusy:
+            # No daily completion is guaranteed for a transient external writer.
+            output('continue')
+            return
         except Yield:
             output('daily_first')
             return
