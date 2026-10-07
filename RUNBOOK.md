@@ -109,7 +109,7 @@ measured healthy baseline while still catching the ~100% starvation signature.
 
 ## Drift baselines (updated 2026-10-05)
 
-`scripts/pipeline/validate_predictions.py` compares live country-aggregate MAE to a baseline and flags drift at 1.5x. Baselines: IN 22.0 (Oct-Feb) / 3.0 (Mar-Sep), AU 2.0, US 2.5, GB 1.5. They are country-mean MAE, not per-station MAE. Re-measure them whenever models are swapped; update `TEST_MAE_BASELINES` / `SEASONAL_BASELINES` in the same PR.
+`scripts/pipeline/validate_predictions.py` compares live country-aggregate MAE to a baseline and flags drift at 1.5x. Baselines: IN 22.0 (Oct-Feb) / 3.0 (Mar-Sep), AU 2.0, US 2.5, GB 3.5 (constant; no winter data yet, re-check Dec-Jan). They are country-mean MAE, not per-station MAE. Re-measure them whenever models are swapped; update `TEST_MAE_BASELINES` / `SEASONAL_BASELINES` in the same PR.
 
 ## launchd quirks (learned the expensive way, 2026-09-28)
 
