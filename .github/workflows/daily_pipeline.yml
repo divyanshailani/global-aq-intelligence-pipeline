@@ -153,6 +153,12 @@ jobs:
           done
           [[ "$succeeded" -eq 1 ]] || { echo 'ERROR: ETL failed after 2 attempts'; exit 1; }
 
+      - name: Auto-repair recent weather gaps
+        timeout-minutes: 12
+        run: |
+          set -Eeuo pipefail
+          python -u scripts/pipeline/repair_recent_weather.py
+
       - name: Assert written data contract
         # Blocking, unlike the advisory final health check: every bug class
         # this gate covers (NULL country_code reaching the site, the ETL

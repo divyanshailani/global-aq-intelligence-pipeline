@@ -227,3 +227,6 @@ The root-level `check_db_health2.py` / `_comprehensive.py` / `_fast.py` variants
 - Before archiving a manual script, search for imports, subprocess calls, shell calls, workflow references, and deployment references.
 - Before moving a production dependency, run the maintained tests and a dry structural verification.
 - Never run database-writing or deployment scripts during a read-only inventory.
+
+- `scripts/pipeline/repair_recent_weather.py`: bounded recent forecast/AOD auto-repair before the written-data contract; no archive calls, finite cells preserved.
+- `tests/test_recent_weather_repair.py`: safety regressions for recent repair routing, bounds, and streamed clean-feature reads.

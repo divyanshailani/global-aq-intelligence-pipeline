@@ -276,16 +276,34 @@ def load_bulk_clean_data(conn, station_ids=None, lookback_days=90):
             )
         else:
             cutoff = datetime.utcnow() - timedelta(days=lookback_days)
-            return pd.read_sql(
-                "SELECT station_id, parameter, value, datetime_local "
-                "FROM clean_measurements "
-                "WHERE station_id = ANY(%(ids)s) "
-                "AND is_valid = true "
-                "AND datetime_local >= %(cutoff)s "
-                "ORDER BY station_id, datetime_local",
-                conn,
-                params={"ids": list(station_ids), "cutoff": cutoff}
+            # Stream unsorted rows: the fleet-wide ORDER BY spilled before
+            # returning anything, leaving the remote SSL connection silent.
+            # Feature builders sort each station themselves. Keep local-date
+            # semantics and use an indexed UTC floor with a timezone buffer.
+            with conn.cursor(name="clean_feature_stream") as cur:
+                cur.itersize = 20000
+                cur.execute(
+                    "SELECT station_id, parameter, value, datetime_local "
+                    "FROM clean_measurements "
+                    "WHERE station_id = ANY(%(ids)s) AND is_valid = true "
+                    "AND datetime_utc >= %(utc_floor)s "
+                    "AND datetime_local >= %(cutoff)s",
+                    {"ids": list(station_ids), "cutoff": cutoff,
+                     "utc_floor": cutoff - timedelta(days=1)}
+                )
+                parts = []
+                while True:
+                    rows = cur.fetchmany(20000)
+                    if not rows:
+                        break
+                    parts.append(pd.DataFrame.from_records(rows, columns=[
+                        "station_id", "parameter", "value", "datetime_local"
+                    ]))
+            conn.commit()
+            return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(
+                columns=["station_id", "parameter", "value", "datetime_local"]
             )
+
 
 
 def bulk_insert_features(conn, features_df, page_size=5000):

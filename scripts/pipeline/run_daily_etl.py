@@ -76,7 +76,7 @@ def main():
                              "Skipped rows stay NULL and retry next run.")
     args = parser.parse_args()
 
-    conn = psycopg2.connect(**DB_CONFIG)
+    conn = psycopg2.connect(**DB_CONFIG, keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=3)
     ensure_weather_columns(conn)
 
     # Determine which stations to process
