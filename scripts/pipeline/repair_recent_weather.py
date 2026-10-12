@@ -32,14 +32,26 @@ def fetch(kind,coords,dt):
  url='https://api.open-meteo.com/v1/forecast' if kind=='weather' else 'https://air-quality-api.open-meteo.com/v1/air-quality'
  params=dict(latitude=','.join(str(x[0]) for x in coords),longitude=','.join(str(x[1]) for x in coords),start_date=str(dt),end_date=str(dt),timezone='auto')
  params.update({'daily':'temperature_2m_mean,wind_speed_10m_max,precipitation_sum'} if kind=='weather' else {'hourly':'aerosol_optical_depth'})
- t=time.monotonic()
- try:r=requests.get(url,params=params,timeout=(10,35))
- except requests.RequestException as e:
-  record(dict(kind='daily_recent_recovery_'+kind,api_calls=1,error=type(e).__name__,date=str(dt),locations=len(coords)));raise
- record(dict(kind='daily_recent_recovery_'+kind,api_calls=1,http=r.status_code,date=str(dt),locations=len(coords),seconds=round(time.monotonic()-t,2)))
- print('SOURCE',kind,dt,len(coords),r.status_code,round(time.monotonic()-t,2),flush=True)
- if r.status_code!=200:raise RuntimeError(str(r.status_code)+' '+r.text[:200])
- entries=r.json();assert isinstance(entries,list) and len(entries)==len(coords)
+ for attempt in range(1,4):
+  if time.monotonic()+50>deadline:raise RuntimeError('recent repair source budget exhausted')
+  assert sum(x.get('api_calls',0) for x in map(json.loads,ledger.read_text().splitlines() if ledger.exists() else []) if str(x.get('at','')).startswith(today.isoformat()))<6000
+  t=time.monotonic()
+  try:
+   r=requests.get(url,params=params,timeout=(15,35))
+  except requests.RequestException as e:
+   record(dict(kind='daily_recent_recovery_'+kind,api_calls=1,attempt=attempt,error=type(e).__name__,date=str(dt),locations=len(coords)))
+   print('SOURCE_RETRY',kind,dt,len(coords),attempt,type(e).__name__,flush=True)
+   if attempt==3:raise
+  else:
+   record(dict(kind='daily_recent_recovery_'+kind,api_calls=1,attempt=attempt,http=r.status_code,date=str(dt),locations=len(coords),seconds=round(time.monotonic()-t,2)))
+   print('SOURCE',kind,dt,len(coords),r.status_code,round(time.monotonic()-t,2),flush=True)
+   if r.status_code==200:break
+   if r.status_code not in (408,429,500,502,503,504) or attempt==3:raise RuntimeError(str(r.status_code)+' '+r.text[:200])
+   print('SOURCE_RETRY',kind,dt,len(coords),attempt,r.status_code,flush=True)
+  time.sleep(2**attempt)
+ entries=r.json()
+ if len(coords)==1 and isinstance(entries,dict):entries=[entries]
+ assert isinstance(entries,list) and len(entries)==len(coords)
  (root/(str(dt)+'-'+kind+'-'+hashlib.sha256(repr(coords).encode()).hexdigest()[:12]+'.json')).write_bytes(r.content)
  out=[]
  for a in entries:
