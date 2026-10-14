@@ -45,3 +45,15 @@ Sources:
 
 - https://github.com/divyanshailani/global-aq-intelligence-pipeline/actions/runs/38550745071
 - https://learn.microsoft.com/en-us/azure/postgresql/compute-storage/concepts-storage
+
+## Additional raw-only retention cut
+
+The settled physical reading remained 85.01-85.28% with 2.1 GB WAL, above the documented less-than-5-GiB-free boundary. A CHECKPOINT at 01:57:16 IST succeeded but did not reduce allocated WAL. SQL confirmed 2,113,929,571 WAL bytes, no replication slots or sessions, successful current archiving and only about 40 MB in other databases. A rerun at that headroom was rejected.
+
+Production consumer review showed daily cleaning reads `recent_days + 1` (six days in this workflow); its default is seven days. The collector uses the latest country timestamp. The 90-day feature lookback reads clean_measurements, not raw_measurements. Legacy all-history/single-station helpers are not scheduled production; their older raw input remains in the private backup.
+
+Within the owner's old-data prune decision, raw retention was reduced to 30 days, cutoff 2026-09-15 00:00:00 UTC. Clean retention remains 92 days. The 30-day retained export was filtered from the already verified and privately backed-up 92-day archive, count/SHA256-checked, then matched to independent live source counts before a separate checkpointed truncate/reload.
+
+Final raw retained count: 13,158,992. Additional raw rows excluded: 23,079,332. Total raw rows excluded across both cuts: 35,329,669. Clean retained: 34,032,324; older clean excluded: 3,137,212. Every final raw row and all clean rows were compared across all columns and IDs against retained archives. All daily/site/model tables stayed untouched.
+
+Raw-only second truncate committed 2026-10-15 02:16:47.713 IST; reload completed about 02:36 IST; final value verification finished 02:40 IST. Database size was 17,918,539,455 bytes (16.688 GiB), writable. Physical storage and production publication remain separate gates to verify, not inferred from this database-size reading.
