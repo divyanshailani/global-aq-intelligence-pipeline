@@ -71,3 +71,7 @@ The live database-status JSON reported 18,663,306,943 bytes (17.382 GiB), genera
 Public verification:
 - https://www.globalaqi.live/data/predictions_IN.json
 - https://www.globalaqi.live/data/db_status.json
+
+## Final physical-storage closeout
+
+Azure portal verification at 04:04 IST after the full successful ETL/publication showed physical storage 73.49% (24.6 GB displayed), allocated WAL 2.0 GB. This is comfortably below the documented safeguard boundary. The temporary maintenance pause was cleared after that verification; regular bounded NaN maintenance and production outcome monitoring remain in place. Storage autogrow remains disabled and no money was spent. Further growth still needs watching; this incident does not create an automatic historical-pruning policy.
