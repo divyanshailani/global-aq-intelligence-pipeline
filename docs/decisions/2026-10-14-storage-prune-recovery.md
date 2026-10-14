@@ -57,3 +57,17 @@ Within the owner's old-data prune decision, raw retention was reduced to 30 days
 Final raw retained count: 13,158,992. Additional raw rows excluded: 23,079,332. Total raw rows excluded across both cuts: 35,329,669. Clean retained: 34,032,324; older clean excluded: 3,137,212. Every final raw row and all clean rows were compared across all columns and IDs against retained archives. All daily/site/model tables stayed untouched.
 
 Raw-only second truncate committed 2026-10-15 02:16:47.713 IST; reload completed about 02:36 IST; final value verification finished 02:40 IST. Database size was 17,918,539,455 bytes (16.688 GiB), writable. Physical storage and production publication remain separate gates to verify, not inferred from this database-size reading.
+
+## Production recovery
+
+Post-raw30 Azure physical storage was 69.87% at about 02:50 IST, with 2.1 GB allocated WAL included. At 03:04-03:05 IST it was 71.95% during recovery writes, still well below the documented safeguard boundary. Full workflow attempt 3 passed ETL on its first attempt, proving the previous storage failure was cleared. It then failed in weather repair after three Open-Meteo TLS handshake timeouts, unrelated to database storage. It had filled 197 recent rows / 788 cells first.
+
+Bounded local recovery filled the remaining 1,191 rows / 4,764 cells from finite forecast/AOD sources, verifying existing finite cells unchanged and recomputing 5,201 recent derived rows. NO_MISSING_WEATHER and the unchanged written-data contract passed before rerun.
+
+Attempt 4 of run 38550745071 completed successfully on October 15: ETL first attempt, weather repair no-gap, contract PASS, inference, prediction validation, freshness and verified frontend publication. Frontend commit: `d46ed012873983d3009eddeeae3a67cb2ce927e2`. Live India JSON was checked after publication: generated 2026-10-14T22:22:31.413258Z (October 15 03:52:31 IST), observation date October 11, advanced from October 9. AU/US observations were October 11; GB October 10. No same-day observation claim is made.
+
+The live database-status JSON reported 18,663,306,943 bytes (17.382 GiB), generated 2026-10-14T22:24:24.397266Z. Final physical storage verification remains separate from this DB-only figure.
+
+Public verification:
+- https://www.globalaqi.live/data/predictions_IN.json
+- https://www.globalaqi.live/data/db_status.json
