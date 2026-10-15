@@ -64,3 +64,38 @@ Targeted inference/weather regression suite: 5 passed. Wider repository contract
 suite has an existing inventory failure for unrelated GB research/backfill
 scripts already on main; this change does not edit those scripts. The new
 cohort regression is registered in SCRIPT_INVENTORY.md.
+
+## Production result, 13:28 IST verification
+
+PR32 merged the fix. Normal daily workflow run38699476601 completed successfully
+at 13:23 IST, including collection, ETL, weather repair, written-data contract,
+inference, validation, generated-data freshness, publication and health checks.
+Public JSON was fetched after deployment, not inferred from a green job alone.
+
+| Country | Old day 1 | Live corrected day 1 | Old stations | Live stations | Old anchor | Live anchor |
+|---|---:|---:|---:|---:|---|---|
+| IN | 68.02 | 51.79 | 658 | 524 | 2026-10-11 | 2026-10-11 |
+| US | 8.12 | 6.15 | 1618 | 248 | 2026-10-11 | 2026-10-12 |
+| GB | 6.37 | 7.49 | 443 | 154 | 2026-10-10 | 2026-10-11 |
+| AU | 6.65 | 4.79 | 225 | 107 | 2026-10-11 | 2026-10-11 |
+
+GB increased because collection advanced its data and the reporting cohort.
+The controlled old-date counterfactual was lower, but production before/after
+also includes new observations. Do not attribute the entire change to the fix.
+India/Australia exactly match the controlled cohort calculation. A separate
+live read confirmed every country's station count matches its PM2.5 row count
+on the published latest date. Public files were generated at 07:52 UTC.
+
+India corrected anchors h1/7/14/30: 51.79/65.15/62.13/86.47. This is verified
+input correctness, not a claim of validated future forecast accuracy.
+
+- Fix: https://github.com/divyanshailani/global-aq-intelligence-pipeline/pull/32
+- Run: https://github.com/divyanshailani/global-aq-intelligence-pipeline/actions/runs/38699476601
+- https://www.globalaqi.live/data/predictions_IN.json
+- https://www.globalaqi.live/data/predictions_US.json
+- https://www.globalaqi.live/data/predictions_GB.json
+- https://www.globalaqi.live/data/predictions_AU.json
+
+Database size after completion: 18,690,340,543 bytes (17.41 GiB), below the
+28-GiB maintenance guard. The website's 54.4% is database-only, not Azure
+physical storage including WAL, and must not replace physical-capacity checks.
