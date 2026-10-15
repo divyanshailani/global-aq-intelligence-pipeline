@@ -65,8 +65,20 @@ def load_models(model_dir):
     return sessions
 
 def load_latest_features_from_db():
-    """Fetches ONLY the latest row per station from PostgreSQL."""
+    """Fetch PM2.5 rows aligned to each country's latest observation date.
+
+    A station's own latest row may be PM10, or years older than the country
+    anchor. Neither can be labeled as a current PM2.5 forecast input. The
+    existing publication freshness gate separately limits country source lag.
+    """
     query = """
+        WITH latest_pm25 AS (
+            SELECT country_code, MAX(date) AS date
+            FROM daily_features
+            WHERE parameter = 'pm25'
+              AND country_code IN ('AU', 'GB', 'IN', 'US')
+            GROUP BY country_code
+        )
         SELECT DISTINCT ON (df.station_id)
             df.date,
             df.station_id,
@@ -89,6 +101,9 @@ def load_latest_features_from_db():
             s.longitude
         FROM daily_features df
         JOIN stations s ON df.station_id = s.id
+        JOIN latest_pm25 latest
+          ON df.country_code = latest.country_code AND df.date = latest.date
+        WHERE df.parameter = 'pm25'
         ORDER BY df.station_id, df.date DESC
     """
     
