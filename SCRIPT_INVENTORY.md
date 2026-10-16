@@ -233,3 +233,5 @@ The root-level `check_db_health2.py` / `_comprehensive.py` / `_fast.py` variants
 
 ### Forecast cohort regression (2026-10-15)
 - `tests/test_inference_cohort.py`: active safety regression for PM2.5-only input rows aligned to the latest country observation date.
+
+- `tests/test_watchdog_launch.py`: maintained regression tests for missing-launch grace timing, existing/active run guards and once-per-day recovery cap.

@@ -133,7 +133,9 @@ def check_run_exists(rep: Report, allow_dispatch: bool) -> None:
         return
 
     # Nothing created today. Only act once the normal queue delay has passed.
-    elapsed = now_utc().hour - CRON_HOUR_UTC
+    scheduled = now_utc().replace(hour=CRON_HOUR_UTC, minute=43,
+                                   second=0, microsecond=0)
+    elapsed = (now_utc() - scheduled).total_seconds() / 3600
     if elapsed < GRACE_HOURS:
         print(f"  no run yet today ({now_utc():%H:%M}Z); within the "
               f"{GRACE_HOURS}h grace window - GitHub may still queue it")
@@ -144,6 +146,11 @@ def check_run_exists(rep: Report, allow_dispatch: bool) -> None:
         f"{GRACE_HOURS}h past the {CRON_HOUR_UTC:02d}:43Z cron). "
         f"The site ages behind an all-green history when the scheduler drops a run."
     )
+    # A prior-day run still active also owns production. Do not add another
+    # recovery dispatch merely because its creation date is yesterday.
+    if any(r.get("status") != "completed" for r in runs):
+        print("  prior-day daily run is still active; yielding production")
+        return
     state = load_state()
     if not allow_dispatch:
         print("  dispatch disabled (--no-dispatch)")
@@ -294,6 +301,8 @@ def escalate(rep: Report) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--launch-only", action="store_true",
+                    help="check/recover missing launches only; no DB, source calls or issue sends")
     ap.add_argument("--no-dispatch", action="store_true",
                     help="report a missing run but do not dispatch one")
     args = ap.parse_args()
@@ -301,6 +310,11 @@ def main() -> int:
     print(f"=== watchdog {now_utc():%Y-%m-%dT%H:%M:%SZ} ===")
     rep = Report()
     check_run_exists(rep, allow_dispatch=not args.no_dispatch)
+    if args.launch_only:
+        # Recovery status is consumed by the external reviewer. Do not create
+        # public issue messages or run unrelated database/source checks here.
+        print(f"launch check: {len(rep.problems)} problem(s), dispatched={rep.dispatched}")
+        return 1 if rep.problems and not rep.dispatched else 0
     check_database(rep)
     check_published_site(rep)
     escalate(rep)
