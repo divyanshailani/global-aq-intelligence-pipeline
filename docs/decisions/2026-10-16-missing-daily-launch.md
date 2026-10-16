@@ -48,4 +48,30 @@ dispatch a duplicate.
 
 ## Outcome
 
-Pending normal production completion and live publication verification.
+Recovery run38876886993 completed successfully at14:53IST. All collection,
+ETL, data-contract, inference, validation, freshness and publication gates
+passed. Recent weather auto-repair reported NO_MISSING_WEATHER, so it made
+no repair/source call. Frontend publication verified commit
+d4d00eb7d5792a87b175bd7307deb27680ea517c.
+
+Independent live public JSON verification at14:56IST confirmed generation
+at09:21UTC onOctober16 and these observation dates/cohorts/day1 values:
+
+| Country | Observation date | Stations | Day1 PM2.5 |
+|---|---|---:|---:|
+| IN | 2026-10-12 | 526 | 52.40 |
+| US | 2026-10-13 | 248 | 6.10 |
+| GB | 2026-10-12 | 158 | 7.19 |
+| AU | 2026-10-12 | 108 | 5.50 |
+
+All observation anchors advanced one day versus the prior published run.
+The reviewed-run checkpoint advanced only after logs and live publication
+were inspected. Temporary completion wakes are consumed. Hourly missing-
+launch and completed-run review remains active. Routine recovery success
+was kept silent under the owner's auto-repair preference.
+
+- Monitor correction: https://github.com/divyanshailani/global-aq-intelligence-pipeline/pull/34
+- https://www.globalaqi.live/data/predictions_IN.json
+- https://www.globalaqi.live/data/predictions_US.json
+- https://www.globalaqi.live/data/predictions_GB.json
+- https://www.globalaqi.live/data/predictions_AU.json
