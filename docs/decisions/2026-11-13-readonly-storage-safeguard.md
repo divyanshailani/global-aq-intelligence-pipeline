@@ -41,3 +41,18 @@ Backup: Drive folder "AQ retention recovery 2026-11-13 PRIVATE" (id 1CXzeXpyDB7r
 Independent Drive readback verification (all passed): re-downloaded every part from Drive; 29/29 part sha256+size match backup-parts.json; both reassembled tar sha256 match tar-sha256.txt; every CSV gzip sha256 matches its manifest entry; decompressed row counts match manifest per block (raw 28,185,637; clean 49,016,840). The Drive copy alone is sufficient to rebuild either table.
 
 Pending: reload (TRUNCATE + checkpointed COPY) requires the parent's hold lift. Writer-fence proposal for the reload window: pause the aq-ops NaN cron, disable the daily workflow schedule, verify zero active runs/backends before each TRUNCATE, restore both after verify; NaN repairs made between export and reload are re-derivable by the rolling 90-day maintenance after reload.
+
+## Writer fence + consistent snapshot (2026-11-13 19:33-20:10 UTC)
+
+Fence applied for the consistent-backup window (parent-authorized reversible exclusion):
+- GH workflows disabled_manually: daily_pipeline 302551358, gb_archive_backfill 375535156, historical_backfill 328537223. Prior states: all "active" (recorded in /data/home/aq_fence_prior_state.txt + aq_fence_prior_workflows.json on the ops box).
+- gb_archive_eval 376145586 was briefly disabled then RE-ENABLED ~19:58 UTC after grounding showed research/gb/export.py + evaluate.py are SELECT-only. aod_backfill 368843447 also re-enabled (workflow_dispatch-only trigger; writes only daily_features).
+- aq-supervisor.timer disabled on the ops box (its aq_reliability.py can dispatch daily_pipeline; the NaN worker writes clean_measurements). PRUNE_ACTIVE marker set.
+- Restore path: /data/home/aq_fence_restore.sh + gh enable per workflow id.
+- Boundary verified: 0 in-progress/queued runs, 0 other DB backends.
+
+Consistent export (fence static): totals IDENTICAL to the pre-fence Nov13 export (raw 28,185,637; clean 49,016,840; kept/old splits identical) - the fence fully stopped drift. Packaged per Oct14 format; uploaded to Drive folder "AQ retention recovery 2026-11-13 consistent-snapshot PRIVATE" (id 1uOGMWaceZUZ6CaP1I8kfSdaBa1vTG4EY). Drive readback: 29/29 part sha256+size OK; both reassembled tar sha256 OK; all 28 CSV gzip sha256 OK; decompressed row counts match manifests (raw 28,185,637; clean 49,016,840).
+
+Drive-alone restore test (on the pre-fence Nov13 set, local PostgreSQL 14): restored both tables from files re-downloaded from Drive - all 28 PK blocks byte-identical vs export files, exact totals. PG14-local vs PG18-live distinction preserved; live restore still gated by the parent's hold.
+
+Full-row verification of the consistent export vs the static live DB: SHA256 row-multiset per kept block, all columns - raw 6/6 MATCH, 0 mismatches; clean in progress at log time.
