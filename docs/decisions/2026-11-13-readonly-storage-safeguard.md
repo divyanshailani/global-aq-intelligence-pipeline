@@ -27,3 +27,17 @@ NO deletion or rerun before main relays the plan.
 - Never override a read-only state while a storage-safeguard hypothesis is open; "intentionality answered" != "storage safety grounded".
 - storage_percent/storage_used support PT5M grain on this resource; query fine grain before claiming metric lag.
 - The handover's own guardrail (">92%: act immediately, writes are about to fail") was correct.
+
+## Backup preparation (2026-11-13 18:15-19:00 UTC, read-only phase)
+
+Exact pre-prune counts (independent DB counts, not estimates):
+- raw_measurements: 28,185,637 total; 15,866,218 older than 2026-10-14 UTC cutoff; 12,319,419 retained. id range 64,724,675..172,942,110. No NULL datetime_utc / id.
+- clean_measurements: 49,016,840 total; 7,024,382 older than 2026-08-13 UTC cutoff; 41,992,458 retained. id range 292,685,660..428,768,527. No NULL datetime_utc / id.
+
+Export: PK-blocked resumable exporter (aq_prune_v2.py, locally tested incl. kill -9 interruption/resume, checkpoint-ledger no-retruncate reload, per-block SHA256 row-multiset verification). Per-block COPY row counts matched independent DB counts for every block.
+
+Backup: Drive folder "AQ retention recovery 2026-11-13 PRIVATE" (id 1CXzeXpyDB7rCaLT9HRonDrr7ra5XdJaC) in the same parent as the Oct 14 backup, same format: 29 tar parts (24 MB each, 684,820,480 B total), RESTORE.txt, backup-parts.json, tar-sha256.txt, per-table manifests. Box copies retained at /data/home/aq-prune-2026-11-13/ as the reload source.
+
+Independent Drive readback verification (all passed): re-downloaded every part from Drive; 29/29 part sha256+size match backup-parts.json; both reassembled tar sha256 match tar-sha256.txt; every CSV gzip sha256 matches its manifest entry; decompressed row counts match manifest per block (raw 28,185,637; clean 49,016,840). The Drive copy alone is sufficient to rebuild either table.
+
+Pending: reload (TRUNCATE + checkpointed COPY) requires the parent's hold lift. Writer-fence proposal for the reload window: pause the aq-ops NaN cron, disable the daily workflow schedule, verify zero active runs/backends before each TRUNCATE, restore both after verify; NaN repairs made between export and reload are re-derivable by the rolling 90-day maintenance after reload.
