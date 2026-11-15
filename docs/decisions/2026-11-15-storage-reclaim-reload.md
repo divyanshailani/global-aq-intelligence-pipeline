@@ -58,3 +58,16 @@ readback-verified backup before any destructive step.
 - TRUNCATE releases physical pages immediately - the only no-spend lever that actually
   shrinks Azure billed storage (DELETE+VACUUM does not, VACUUM FULL needs 2x headroom).
 - clean's primary key is constraint-backed; DROP CONSTRAINT, restore with ADD PRIMARY KEY.
+
+## Rerun outcome (appended same day)
+Daily pipeline rerun 43737061965 (dispatched 16:43 UTC): incremental collection + ETL
+SUCCEEDED - first green ETL since Nov 12. Freshness advanced: raw max Nov 11 10:00 ->
+Nov 12 16:00 UTC (+14,034 rows since Nov 12 00:00), clean max Nov 10 14:00 -> Nov 12
+16:00 UTC (+13,450), daily_features max Nov 9 -> Nov 12. This confirms the staleness
+diagnosis: ingestion writes real-time data and the upstream source is healthy; the
+4-day gap was caused by the storage-safeguard pipeline failures, now fixed by the
+reclaim. Run still ended red: "Auto-repair recent weather gaps" hit Open-Meteo daily
+API quota (HTTP 429 "try again tomorrow"), so inference/publish steps were skipped and
+the site keeps serving its last published JSON until a run clears the weather step
+(quota resets next UTC day). Data remains ~2.5 days behind realtime; the next scheduled
+run should advance it further (one run caught up ~1.5-2 days).
