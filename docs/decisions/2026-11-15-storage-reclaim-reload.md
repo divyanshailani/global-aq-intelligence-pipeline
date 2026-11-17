@@ -71,3 +71,17 @@ API quota (HTTP 429 "try again tomorrow"), so inference/publish steps were skipp
 the site keeps serving its last published JSON until a run clears the weather step
 (quota resets next UTC day). Data remains ~2.5 days behind realtime; the next scheduled
 run should advance it further (one run caught up ~1.5-2 days).
+
+## Final outcome 2026-11-17 12:05 IST: incident fully closed
+
+The post-reclaim publish blockage is resolved. Timeline: Nov15 reclaim green ->
+publish blocked 5 days by (1) Open-Meteo quota 429, (2) multi-minute open-meteo
+flap windows killing short-retry calls, (3) the repair step's fail-closed
+10-minute budget vs a multi-day backlog, (4) the data contract's 2d
+prediction-age guard deadlocking against the inference step that would refresh
+it. Fixes landed 2026-11-17 with owner sign-off at each step: retry/backoff
+hardening 3->5 attempts 10-80s (6cbed58), budget exhaustion as graceful partial
+success (a751c2e), permanent max_prediction_age_days dispatch input (eb28ecb).
+Rerun 44025683139 fully green; publish restored (web main 75f137c);
+prediction_log 2026-11-17; storage 57.66%; freshness Nov14 (upstream
+source-bound). Full detail: docs/decisions/2026-11-17-open-meteo-retry-backoff.md.

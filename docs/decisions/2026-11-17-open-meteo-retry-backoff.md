@@ -104,3 +104,17 @@ insert was explicitly rejected: it would fake the guard's evidence.
 
 Verification: dispatched with max_prediction_age_days=6 (current age 5d).
 Outcome appended below after the run.
+
+## Outcome 2026-11-17 12:05 IST: RESOLVED, publish restored
+
+Verification rerun 44025683139 (max_prediction_age_days=6, commit eb28ecb): fully
+green, all 18 steps. Contract passed (prediction age 5d within override 6d),
+inference logged 120 predictions, prediction_log max(run_date)=2026-11-17,
+frontend published to global-aq-intelligence-web main (75f137c, Vercel deploy
+triggered), storage 57.66% of 32 GiB. Publish had been blocked since Nov 12.
+
+Data position: daily_features max 2026-11-14, clean_measurements max
+2026-11-14 05:00 UTC - the upstream OpenAQ S3 archive frontier advanced during
+the day; remaining lag is source-bound, not pipeline-bound. Weather backlog
+fully drained (contract: 0 missing om_* cells). Scheduled runs resume at the
+default 2d prediction-age budget; prediction_log is 1d old tomorrow, inside it.
