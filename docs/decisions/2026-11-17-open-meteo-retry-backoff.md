@@ -53,3 +53,25 @@ inference/publish should execute. Outcome appended below after the run.
   because the OpenAQ S3 archive is lagging (IN: "S3 MISS ... 0 rows inserted
   (archive lag)", REST fallback disabled; US 9,313 / GB 5 / AU 7,740 rows inserted
   Nov 16). Source-lag, not a pipeline stall; monitored separately.
+
+## Addendum 2026-11-17 10:22 IST: budget exhaustion -> graceful partial success
+
+Verification rerun 44013655831 on the retry/backoff fix (6cbed58) showed the fix
+working (three consecutive ReadTimeouts rode through a flap window to a 200 in
+0.71s; 11 batches / ~470 station-days repaired, 2026-11-14 fully drained, part of
+2026-11-13) but the run still failed: the step's internal 10-minute budget was
+exhausted mid-backlog and that condition was fail-closed, skipping publish a 5th day.
+
+Owner signed off (2026-11-17 ~10:22 IST) on making budget exhaustion a graceful
+partial success, exactly as proposed:
+- new `_BudgetExhausted` exception replaces the fail-closed RuntimeError on the
+  per-attempt source budget guard and the loop-level 10-minute deadline;
+- loop prints REPAIR_PARTIAL and breaks; committed batches stay, derived-feature
+  recompute still runs, step exits 0, publish proceeds;
+- backlog resumes where it left off on the next run.
+
+Fail-closed unchanged for real faults: quota/429 after 5 attempts, non-retryable
+status codes, assertion failures, finite-cell immutability checks, storage guard.
+Owner explicitly declined the alternative (raising the internal budget) - slow
+runs and still fails on large backlogs. Landed as commit a751c2e.
+Verification: rerun dispatched immediately after push; outcome appended below.
