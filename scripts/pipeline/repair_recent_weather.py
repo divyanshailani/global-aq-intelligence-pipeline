@@ -12,6 +12,7 @@ from psycopg2.extras import execute_values
 from src.config import DB_CONFIG
 root=Path('/tmp/recent-weather-recovery');root.mkdir(exist_ok=True)
 ledger=root/'ledger.jsonl'
+class _BudgetExhausted(Exception):pass
 def conn():
  c=psycopg2.connect(**DB_CONFIG,connect_timeout=10,keepalives=1,keepalives_idle=30,keepalives_interval=10,keepalives_count=3)
  with c.cursor() as q:q.execute('SET statement_timeout=60000')
@@ -33,7 +34,7 @@ def fetch(kind,coords,dt):
  params=dict(latitude=','.join(str(x[0]) for x in coords),longitude=','.join(str(x[1]) for x in coords),start_date=str(dt),end_date=str(dt),timezone='auto')
  params.update({'daily':'temperature_2m_mean,wind_speed_10m_max,precipitation_sum'} if kind=='weather' else {'hourly':'aerosol_optical_depth'})
  for attempt in range(1,6):
-  if time.monotonic()+50>deadline:raise RuntimeError('recent repair source budget exhausted')
+  if time.monotonic()+50>deadline:raise _BudgetExhausted()
   assert sum(x.get('api_calls',0) for x in map(json.loads,ledger.read_text().splitlines() if ledger.exists() else []) if str(x.get('at','')).startswith(today.isoformat()))<6000
   t=time.monotonic()
   try:
@@ -70,12 +71,15 @@ today=datetime.datetime.now(datetime.timezone.utc).date();lo=today-datetime.time
 deadline=time.monotonic()+600
 repaired_rows=0
 for _ in range(125):
- if time.monotonic()>deadline:raise RuntimeError('recent repair 10-minute budget exhausted')
+ if time.monotonic()>deadline:print('REPAIR_PARTIAL 10-minute budget exhausted; backlog resumes next run',flush=True);break
  with c.cursor() as q:
   q.execute("SELECT DISTINCT d.station_id,d.date,s.latitude,s.longitude FROM daily_features d JOIN stations s ON s.id=d.station_id WHERE d.date BETWEEN %s AND %s AND s.country_code IN ('IN','US','GB','AU') AND s.latitude IS NOT NULL AND s.longitude IS NOT NULL AND (d.om_temperature IS NULL OR d.om_temperature::text='NaN' OR d.om_precipitation IS NULL OR d.om_precipitation::text='NaN' OR d.om_aerosol_optical_depth IS NULL OR d.om_aerosol_optical_depth::text='NaN') ORDER BY d.date DESC,d.station_id LIMIT 40",(lo,today));work=q.fetchall()
  c.commit()
  if not work:print('NO_MISSING_WEATHER',flush=True);break
- dt=work[0][1];work=[x for x in work if x[1]==dt];coords=list(dict.fromkeys((r[2],r[3]) for r in work));w=fetch('weather',coords,dt);a=fetch('aod',coords,dt);data={co:[*wv,av] for co,wv,av in zip(coords,w,a)}
+ dt=work[0][1];work=[x for x in work if x[1]==dt];coords=list(dict.fromkeys((r[2],r[3]) for r in work))
+ try:w=fetch('weather',coords,dt);a=fetch('aod',coords,dt)
+ except _BudgetExhausted:print('REPAIR_PARTIAL source budget exhausted mid-batch; backlog resumes next run',flush=True);break
+ data={co:[*wv,av] for co,wv,av in zip(coords,w,a)}
  guard(c);ids=[x[0] for x in work]
  with c.cursor() as q:
   q.execute('SELECT station_id,date,parameter,'+','.join(fields)+' FROM daily_features WHERE station_id=ANY(%s) AND date=%s ORDER BY station_id,date,parameter FOR UPDATE',(ids,dt));before=q.fetchall()
