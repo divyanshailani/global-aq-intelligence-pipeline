@@ -75,3 +75,32 @@ status codes, assertion failures, finite-cell immutability checks, storage guard
 Owner explicitly declined the alternative (raising the internal budget) - slow
 runs and still fails on large backlogs. Landed as commit a751c2e.
 Verification: rerun dispatched immediately after push; outcome appended below.
+
+## Addendum 2026-11-17 11:10 IST: prediction-age deadlock recovery path (dispatch input)
+
+After the weather backlog fully drained (contract: 0 missing om_* cells in the
+Nov12-17 window), the run still failed at "Assert written data contract":
+newest prediction_log run was 2026-11-12, 5d old, budget 2d. The contract step
+runs before inference, so after a multi-day publish outage the guard blocks the
+very inference run that would refresh prediction_log - a structural deadlock
+that no rerun can clear.
+
+Owner (via parent, 2026-11-17 11:09 IST, choosing between two proposed options)
+picked the PERMANENT workflow_dispatch input over a temporary env override:
+the deadlock recreates after any future multi-day publish outage, and a
+hardcode-then-revert dance is exactly the kind of throwaway diff that bites
+later. Change (daily_pipeline.yml):
+- new workflow_dispatch input max_prediction_age_days (string, default '2'),
+  wired into the contract step env as MAX_PREDICTION_AGE_DAYS with || '2'
+  fallback, so scheduled runs and bare dispatches behave exactly as before
+  (guard stays fail-closed at 2d by default);
+- assert_data_contract.py already reads MAX_PREDICTION_AGE_DAYS from env
+  (default 2) - no script change needed.
+
+Documented recovery path: dispatch with max_prediction_age_days set just above
+the current prediction_log age -> contract passes -> inference refreshes
+prediction_log -> subsequent runs pass at the default. A direct prediction_log
+insert was explicitly rejected: it would fake the guard's evidence.
+
+Verification: dispatched with max_prediction_age_days=6 (current age 5d).
+Outcome appended below after the run.

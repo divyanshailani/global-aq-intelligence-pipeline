@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '43 5 * * *'
   workflow_dispatch:
+    inputs:
+      max_prediction_age_days:
+        description: 'Recovery override: max allowed prediction_log age (days) for the data contract. Default 2; raise only to break the post-outage deadlock where the contract blocks the inference run that would refresh prediction_log.'
+        required: false
+        default: '2'
+        type: string
 
 # Database writes and frontend publication must never overlap with backfill.
 concurrency:
@@ -166,6 +172,8 @@ jobs:
         # and then every downstream step reported success. Failing HERE stops
         # inference and publish from propagating the bad rows; the ETL wrote
         # them, the site must not wear them.
+        env:
+          MAX_PREDICTION_AGE_DAYS: ${{ inputs.max_prediction_age_days || '2' }}
         run: |
           set -Eeuo pipefail
           python -u scripts/pipeline/assert_data_contract.py
